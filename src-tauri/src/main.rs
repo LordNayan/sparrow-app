@@ -16,15 +16,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::{thread, time};
 use tauri::Manager;
 use url_fetch_handler::import_swagger_url;
 use urlencoded_handler::make_www_form_urlencoded_request;
 use window_shadows::set_shadow;
-
-#[cfg(target_os = "macos")]
-#[macro_use]
-extern crate objc;
 
 // Commands
 #[tauri::command]
@@ -71,53 +66,6 @@ fn fetch_file_command() -> String {
         }
     }
     return response;
-}
-
-#[tauri::command]
-async fn open_oauth_window(handle: tauri::AppHandle) {
-    let oauth_window = handle.get_webview_window("oauth");
-    if oauth_window == None {
-        tauri::WebviewWindowBuilder::new(
-            &handle,
-            "oauth",
-            tauri::WebviewUrl::External(
-                "https://dev-api.sparrow.techdomeaks.com/api/auth/google"
-                    .parse()
-                    .unwrap(),
-            ),
-        )
-        .title("")
-        .build()
-        .unwrap();
-    } else {
-        let oauth_window = handle.get_webview_window("oauth").unwrap();
-        let _ = oauth_window.eval(&format!(
-            "window.location.replace('https://dev-api.sparrow.techdomeaks.com/api/auth/google')"
-        ));
-        let one_sec = time::Duration::from_secs(1);
-        thread::sleep(one_sec);
-
-        let _ = oauth_window.center();
-        let _ = oauth_window.show();
-    }
-    let oauth_window = handle.get_webview_window("oauth").unwrap();
-    oauth_window
-        .emit(
-            "onclose",
-            OnClosePayload {
-                message: "Window Close Event".into(),
-            },
-        )
-        .unwrap();
-}
-
-#[tauri::command]
-async fn close_oauth_window(handle: tauri::AppHandle) {
-    let oauth_window = handle.get_webview_window("oauth").unwrap();
-    let _ = oauth_window.eval(&format!(
-        "window.location.replace('https://accounts.google.com/logout')"
-    ));
-    let _ = oauth_window.hide();
 }
 
 #[tauri::command]
@@ -248,8 +196,6 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             fetch_swagger_url_command,
             fetch_file_command,
-            open_oauth_window,
-            close_oauth_window,
             make_http_request,
             zoom_window
         ])
@@ -272,6 +218,7 @@ fn main() {
         })
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_shell::init())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

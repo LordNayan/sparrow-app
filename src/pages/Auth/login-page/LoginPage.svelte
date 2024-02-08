@@ -6,14 +6,8 @@
   import googleLogo from "$lib/assets/googlelogo.svg";
   import eyeHide from "$lib/assets/eye-hide.svg";
   import eyeShow from "$lib/assets/eye-show.svg";
-
-  // import githubLogo from "$lib/assets/githublogo.svg";
-  // import microsoftLogo from "$lib/assets/microsoftlogo.svg";
-
   import { authNavigate, handleLoginValidation } from "./login-page";
   import sparrowicon from "$lib/assets/sparrowIcon.svg";
-  import { once } from "@tauri-apps/api/event";
-  import { Window } from "@tauri-apps/api/window";
   import LoginLoader from "$lib/components/Transition/LoginLoader.svelte";
 
   let isEmailTouched = false;
@@ -62,15 +56,6 @@
     isLoadingPage = true;
     await authNavigate();
   };
-
-  once("onclose", async (event) => {
-    const oauthWindow = await Window.getByLabel("oauth");
-    if (oauthWindow) {
-      oauthWindow.onCloseRequested(() => {
-        isLoadingPage = false;
-      });
-    }
-  });
 
   let isPasswordtouched: boolean = false;
 

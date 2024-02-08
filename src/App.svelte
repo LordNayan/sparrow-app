@@ -31,6 +31,9 @@
   import { createDeepCopy } from "$lib/utils/helpers/conversion.helper";
   import WelcomeScreen from "$lib/components/Transition/WelcomeScreen.svelte";
   import { handleShortcuts } from "$lib/utils/shortcuts";
+  import LoginPageV2 from "./pages/Auth/login-page/LoginPage-v2.svelte";
+  import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
+  import { setUserTokens } from "./pages/Auth/login-page/login-page";
 
   export let url = "/";
   const tabRepository = new TabRepository();
@@ -65,19 +68,7 @@
 
   onMount(async () => {
     listen("receive-login", async (event: any) => {
-      const params = new URLSearchParams(event.payload.url.split("?")[1]);
-      const accessToken = params.get("accessToken");
-      const refreshToken = params.get("refreshToken");
-      if (accessToken && refreshToken) {
-        await invoke("close_oauth_window");
-        await Window.getByLabel("main")!.setFocus();
-        setAuthJwt(constants.AUTH_TOKEN, accessToken);
-        setAuthJwt(constants.REF_TOKEN, refreshToken);
-        setUser(jwtDecode(accessToken));
-        notifications.success("Login successful!");
-        navigate("/dashboard/collections");
-        await resizeWindowOnLogin();
-      }
+      await setUserTokens(event.payload.url);
     });
 
     let isloggedIn;
@@ -101,7 +92,8 @@
     </section>
     <section slot="unauthorized">
       <Route path="/forgot/password" component={ForgotPassword} />
-      <Route path="/login" component={LoginPage} />
+      <Route path="/login-v2" component={LoginPage} />
+      <Route path="/login" component={LoginPageV2} />
       <Route path="/register" component={RegisterPage} />
       <Route path="/update/password" component={UpdatePassword} />
       <Route path="/reset/password" component={ResetPassword} />

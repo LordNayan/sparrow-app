@@ -10,13 +10,15 @@ import {
   resizeWindowOnLogOut,
   resizeWindowOnLogin,
 } from "$lib/components/header/window-resize";
-import { invoke } from "@tauri-apps/api/core";
 import mixpanel from "mixpanel-browser";
 import MixpanelEvent from "$lib/utils/mixpanel/MixpanelEvent";
 import { Events } from "$lib/utils/enums/mixpanel-events.enum";
 import ActiveSideBarTabViewModel from "./../../dashboard/ActiveSideBarTab.ViewModel";
 //------------------------------MixPanel-------------------------------//
-export const sendUserDataToMixpanel = (userDetails) => {
+export const sendUserDataToMixpanel = (userDetails: {
+  _id: string;
+  email: string;
+}) => {
   if (constants.ENABLE_MIX_PANEL === "true") {
     mixpanel.identify(userDetails._id);
     mixpanel.people.set({ $email: userDetails.email });
@@ -29,7 +31,7 @@ export const navigateToRegister = () => {
 };
 
 export const authNavigate = async () => {
-  await invoke("open_oauth_window");
+  // await invoke("open_oauth_window");
 };
 const _activeSidebarTabViewModel = new ActiveSideBarTabViewModel();
 
@@ -75,3 +77,17 @@ export const handleLoginValidation = async (
 
   return handleLogin(loginCredentials);
 };
+
+export async function setUserTokens(url: string) {
+  const params = new URLSearchParams(url.split("?")[1]);
+  const accessToken = params.get("accessToken");
+  const refreshToken = params.get("refreshToken");
+  if (accessToken && refreshToken) {
+    setAuthJwt(constants.AUTH_TOKEN, accessToken);
+    setAuthJwt(constants.REF_TOKEN, refreshToken);
+    setUser(jwtDecode(accessToken));
+    notifications.success("Login successful!");
+    navigate("/dashboard/collections");
+    await resizeWindowOnLogin();
+  }
+}
