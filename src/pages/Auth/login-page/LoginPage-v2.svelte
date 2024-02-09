@@ -3,20 +3,11 @@
   import LoginLoader from "$lib/components/Transition/LoginLoader.svelte";
   import { open } from "@tauri-apps/plugin-shell";
   import Button from "$lib/components/buttons/Button.svelte";
-  import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
-  import { setUserTokens } from "./login-page";
 
   let isLoadingPage: boolean;
 
-  const handleDeepLinkHandler = async (urls: string[]) => {
-    if (urls.length) {
-      await setUserTokens(urls[0]);
-      isLoadingPage = false;
-    }
-  };
   const handleSignIn = async () => {
-    await onOpenUrl(handleDeepLinkHandler);
-    await open("sparrow://?accessToken=something&refreshToken=sometheingElse");
+    await open("http://localhost:1421/login");
     isLoadingPage = true;
   };
 </script>

@@ -78,14 +78,20 @@ export const handleLoginValidation = async (
   return handleLogin(loginCredentials);
 };
 
-export async function setUserTokens(url: string) {
+export async function handleLoginV2(url: string) {
   const params = new URLSearchParams(url.split("?")[1]);
   const accessToken = params.get("accessToken");
   const refreshToken = params.get("refreshToken");
   if (accessToken && refreshToken) {
+    const userDetails = jwtDecode(accessToken);
     setAuthJwt(constants.AUTH_TOKEN, accessToken);
     setAuthJwt(constants.REF_TOKEN, refreshToken);
     setUser(jwtDecode(accessToken));
+    sendUserDataToMixpanel(userDetails);
+    MixpanelEvent(Events.USER_LOGIN, {
+      Login_Method: "Email",
+      Success: true,
+    });
     notifications.success("Login successful!");
     navigate("/dashboard/collections");
     await resizeWindowOnLogin();

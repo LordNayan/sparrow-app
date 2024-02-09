@@ -20,20 +20,16 @@
 
   import { onMount } from "svelte";
 
-  import { setUser, user } from "$lib/store/auth.store";
+  import { user } from "$lib/store/auth.store";
   import { listen } from "@tauri-apps/api/event";
-  import { Window } from "@tauri-apps/plugin-window";
-  import { jwtDecode, setAuthJwt } from "$lib/utils/jwt";
-  import constants from "$lib/utils/constants";
-  import { notifications } from "$lib/utils/notifications";
   import { generateSampleRequest } from "$lib/utils/sample/request.sample";
-  import { invoke } from "@tauri-apps/api/core";
   import { createDeepCopy } from "$lib/utils/helpers/conversion.helper";
   import WelcomeScreen from "$lib/components/Transition/WelcomeScreen.svelte";
   import { handleShortcuts } from "$lib/utils/shortcuts";
   import LoginPageV2 from "./pages/Auth/login-page/LoginPage-v2.svelte";
   import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
-  import { setUserTokens } from "./pages/Auth/login-page/login-page";
+  import { handleLoginV2 } from "./pages/Auth/login-page/login-page";
+  import { handleDeepLinkHandler } from "$lib/utils/deepLinkHandler";
 
   export let url = "/";
   const tabRepository = new TabRepository();
@@ -67,8 +63,10 @@
   });
 
   onMount(async () => {
+    await onOpenUrl(handleDeepLinkHandler);
+
     listen("receive-login", async (event: any) => {
-      await setUserTokens(event.payload.url);
+      await handleLoginV2(event.payload.url);
     });
 
     let isloggedIn;
