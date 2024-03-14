@@ -12,6 +12,7 @@ import { HeaderDashboardViewModel } from "$lib/components/header/header-dashboar
 import MixpanelEvent from "$lib/utils/mixpanel/MixpanelEvent";
 import { Events } from "$lib/utils/enums/mixpanel-events.enum";
 import type { MakeRequestResponse } from "$lib/utils/interfaces/common.interface";
+import { AzureKeyCredential, OpenAIClient } from "@azure/openai";
 const apiTimeOut = constants.API_SEND_TIMEOUT;
 
 const error = (
@@ -134,6 +135,61 @@ function timeout(timeout: number) {
   });
 }
 
+export async function callOpenAI(request: string) {
+  try {
+    const client = new OpenAIClient(
+      "https://sparrow6014458908.openai.azure.com/",
+      new AzureKeyCredential(""),
+    );
+    // const responseStreamGpt3 = await client.streamChatCompletions(
+    //   "gpt-35-turbo-instruct",
+    //   [
+    //     `Give me selectable suggestions on improving the below api endpoint.
+    //   API - /user/details?authorization=jsdnbjlbn1io3bjlqe3bnlfbn3io3jkl2nkljn3kl?api_key=husdvghjd675678`,
+    //   ],
+    // );
+
+    const responseStreamGpt4 = await client.streamChatCompletions("gpt-4", [
+      {
+        role: "user",
+        content: `Given a REST API in custome strigified JSON format, parse it and suggest improvements in the form of 5 concise bullet points suitable for a dropdown menu. Focus on aspects such as efficiency, security, scalability, and user experience. Provide actionable suggestions that can be implemented directly by selecting from the dropdown menu. Remember to only provide suggestions that can be directly made to the api like changing request body type, making the url path according to REST standards or shifting something from query to header or header to body or vice versa. The tool that will use this AI prompt is a simple API testing tool that supports query params, headers, path params and json body. Just follow REST standards when suggesting. 
+
+        Give response in a html based format that can be shown in a div. Remember that I am streaming the response so data might not contain a complete point but you have to make sure to give line breaks at proper place such that points are seperated properly. Also put a empty line between each point. No need to start with the keyword html. Put important things inside some kind of highlight and keep the points concise.
+
+        Highlight IMPORTANT HEADINGS and then start the content. Make sure to give proper line breaks between headings.
+        API - ${request}`,
+        name: "Nayan",
+      },
+    ]);
+    const readableStream = responseStreamGpt4.getReader();
+    console.log("HERE", readableStream);
+    // Process the response stream (call this in your main script)
+    await processStream(readableStream);
+  } catch (e) {
+    console.log(e);
+  }
+}
+
+async function processStream(reader: any) {
+  let result = await reader.read();
+  let currentText = "";
+  while (!result.done) {
+    if (result.value && result.value.choices && result.value.choices.length) {
+      const newText = result.value.choices[0].delta.content;
+      for (let i = 0; i < newText.length; i++) {
+        currentText += newText[i];
+
+        if (currentText.startsWith("^\\d.")) {
+          currentText = "\n" + currentText;
+        }
+        document.getElementById("ai-text")!.innerHTML = currentText;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    }
+    result = await reader.read();
+  }
+}
+
 const makeHttpRequest = async (
   url: string,
   method: string,
@@ -142,6 +198,7 @@ const makeHttpRequest = async (
   request: string,
   tabId: string,
 ) => {
+  callOpenAI();
   console.table({ url, method, headers, body, request });
   let response;
   MixpanelEvent(Events.SEND_API_REQUEST, { method: method });

@@ -20,6 +20,9 @@
   import { handleShortcuts } from "$lib/utils/shortcuts";
   import AutoUpdateDialog from "$lib/components/Modal/AutoUpdateDialog.svelte";
   import { getCurrent } from "@tauri-apps/api/window";
+  import { OpenAIClient, AzureKeyCredential } from "@azure/openai";
+  import LoginPage from "./pages/Auth/login-page/LoginPage.svelte";
+  import RegisterPage from "./pages/Auth/register-page/RegisterPage.svelte";
 
   export let url = "/";
   const tabRepository = new TabRepository();
@@ -104,19 +107,14 @@
       <Route path="/*"><Navigate to="/dashboard" /></Route>
     </section>
     <section slot="unauthorized">
-      <Route path="/init" component={EntryPoint} />
-      <!-- - -->
-      <!-- deprecated - visit sparrow auth repo -->
-      <!-- - -->
-
-      <!-- <Route path="/forgot/password" component={ForgotPassword} />
-      <Route path="/login" component={LoginPage} />
-      <Route path="/register" component={RegisterPage} />
-      <Route path="/update/password" component={UpdatePassword} />
-      <Route path="/reset/password" component={ResetPassword} />
-      <Route path="/waiting" component={Waiting} />
-      <Route path="/welcome" component={WelcomeScreen} /> -->
-      <Route path="/*"><Navigate to="/init" /></Route>
+      {#if 0}
+        <Route path="/init" component={EntryPoint} />
+        <Route path="/*"><Navigate to="/init" /></Route>
+      {:else}
+        <Route path="/login" component={LoginPage} />
+        <Route path="/register" component={RegisterPage} />
+        <Route path="/*"><Navigate to="/login" /></Route>
+      {/if}
     </section>
   </Authguard>
 </Router>

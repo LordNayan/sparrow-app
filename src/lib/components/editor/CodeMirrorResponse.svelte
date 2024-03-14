@@ -59,6 +59,7 @@
       });
     }
     if (formatter === ResponseFormatter.PRETTY) {
+      console.log("RAW ===> ", rawValue);
       CodeMirrorViewHandler(codeMirrorView, languageConf, rawTab);
       if (rawTab === RequestDataType.JSON) {
         try {

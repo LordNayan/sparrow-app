@@ -7,6 +7,8 @@
   export let type: "primary" | "dark" | "danger" = "primary";
   export let canClose = true;
   export let icon = "";
+  export let userClass = "";
+
   /**
    * Takes x-index, recommended values => 1, 100, 1000, 10000, 100000.
    */
@@ -20,13 +22,13 @@
 
 {#if isOpen}
   <div
-    class="sparrow-modal-bg-overlay"
+    class={`sparrow-modal-bg-overlay`}
     style={`z-index: ${zIndex}`}
     on:click={canClose ? handleModalState(false) : null}
     transition:fade={{ delay: 0, duration: 100 }}
   />
   <div
-    class="sparrow-modal-container gap-2 p-4"
+    class={`sparrow-modal-container gap-2 p-4`}
     style={`z-index: ${zIndex + 1}; width: ${width}`}
     transition:fly={{ y: 50, delay: 0, duration: 100 }}
     on:introstart

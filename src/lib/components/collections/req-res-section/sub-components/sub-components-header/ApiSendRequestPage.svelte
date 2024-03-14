@@ -11,7 +11,6 @@
   import { onDestroy } from "svelte";
   import { ApiSendRequestViewModel } from "./ApiSendRequestPage.ViewModel";
   import { createApiRequest } from "$lib/services/rest-api.service";
-  import ColorDropdown from "$lib/components/dropdown/ColourDropdown.svelte";
   import {
     RequestMethod,
     RequestProperty,
@@ -32,6 +31,8 @@
   } from "$lib/database/app.database";
   import type { Observable } from "rxjs";
   import Dropdown from "$lib/components/dropdown/Dropdown.svelte";
+  import { ModalWrapperV1 } from "$lib/components";
+  import { callOpenAI } from "$lib/api/api.common";
 
   export const loaderColor = "default";
   export let activeTab;
@@ -41,6 +42,7 @@
   const _apiSendRequest = new ApiSendRequestViewModel();
 
   let isCollaps: boolean;
+  let isAIPopupVisible = false;
 
   collapsibleState.subscribe((value) => (isCollaps = value));
   const environmentHelper = new EnvironmentHeper();
@@ -200,6 +202,16 @@
     }
   };
 
+  const callAI = async () => {
+    console.log(request);
+    callOpenAI(JSON.stringify(request));
+    handleAIPopUp(true);
+  };
+
+  const handleAIPopUp = (open: boolean) => {
+    isAIPopupVisible = open;
+  };
+
   const extractKeyValueFromUrl = (url: string) => {
     let queryString: string = "";
     let flag: boolean = false;
@@ -336,6 +348,19 @@
 </script>
 
 <div class="d-flex flex-column">
+  <div>
+    <ModalWrapperV1
+      userClass="ai-popup"
+      title={"The Magic of AI!"}
+      type={"primary"}
+      width={"35%"}
+      zIndex={1000}
+      isOpen={isAIPopupVisible}
+      handleModalState={handleAIPopUp}
+    >
+      <div id="ai-text"></div>
+    </ModalWrapperV1>
+  </div>
   <div
     class="d-flex align-items-center justify-content-between {isCollaps
       ? 'ps-5 pt-3 pe-3'
@@ -463,6 +488,13 @@
           {localEnvKey}
         />
       {/if}
+      <div class="ai-icon" on:click={callAI}>
+        <img
+          class="icon-image vwh-10"
+          src="../src/lib/assets/star.png"
+          alt="Icon Image"
+        />
+      </div>
       <button
         disabled={disabledSend}
         class="d-flex align-items-center justify-content-center btn btn-primary text-whiteColor ps-4 pe-4 py-2"
@@ -568,5 +600,12 @@
     background-color: var(--background-dark);
     border: 1px solid #272727 !important;
     font-size: 12px;
+  }
+  .ai-icon {
+    cursor: pointer;
+  }
+  .icon-image {
+    width: 30px;
+    height: 30px;
   }
 </style>

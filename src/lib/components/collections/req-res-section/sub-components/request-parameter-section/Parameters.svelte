@@ -56,7 +56,7 @@
       authValue = findAuthParameter(request);
       let flag: boolean = false;
       for (let i = 0; i < params.length - 1; i++) {
-        if (params[i].checked === false) {
+        if (params[i]?.checked === false) {
           flag = true;
         }
       }
