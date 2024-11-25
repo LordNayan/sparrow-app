@@ -9,6 +9,7 @@ async function init() {
     mixpanel.init(mixPanelToken);
   }
   const rxdbInstance = RxDB.getInstance();
+  await rxdbInstance.destroyDb();
   await rxdbInstance.getDb();
   return new App({
     target: document.getElementById("app"),

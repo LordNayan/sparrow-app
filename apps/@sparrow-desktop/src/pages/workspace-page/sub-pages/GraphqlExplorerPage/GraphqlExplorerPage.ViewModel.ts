@@ -9,6 +9,7 @@ import {
   throttle,
 } from "@sparrow/common/utils";
 import { CompareArray, Debounce } from "@sparrow/common/utils";
+import { BaseDirectory, writeTextFile } from "@tauri-apps/plugin-fs";
 
 // ---- DB
 import type {
@@ -16,6 +17,7 @@ import type {
   TabDocument,
   WorkspaceDocument,
 } from "../../../../database/database";
+import * as fs from "fs";
 
 // ---- Repo
 import { TabRepository } from "../../../../repositories/tab.repository";
@@ -62,6 +64,7 @@ import {
   type EnvironmentFilteredVariableBaseInterface,
   type EnvironmentLocalGlobalJoinBaseInterface,
 } from "@sparrow/common/types/workspace/environment-base";
+import { save } from "@tauri-apps/plugin-dialog";
 import { CollectionItemTypeBaseEnum } from "@sparrow/common/types/workspace/collection-base";
 class GraphqlExplorerViewModel {
   /**
@@ -431,6 +434,146 @@ class GraphqlExplorerViewModel {
     return type?.name || type?.ofType?.name || "";
   };
 
+  private parseSchemaToJSON = (introspectionData: any) => {
+    // console.log(introspectionData);
+    const schemaJSON = {};
+    const types = introspectionData.__schema?.types;
+
+    if (!types || !Array.isArray(types)) {
+      throw new Error(
+        "Invalid introspection data: 'types' is missing or not an array.",
+      );
+    }
+
+    types.forEach((type) => {
+      // Ensure type object is valid
+      if (!type || !type.name || !type.kind) return;
+
+      // Skip built-in types
+      if (type.name.startsWith("__")) return;
+
+      const typeObject: any = {
+        kind: type.kind,
+        fields: {},
+      };
+
+      if (type.kind === "OBJECT" || type.kind === "INPUT_OBJECT") {
+        const fields = type.kind === "OBJECT" ? type.fields : type.inputFields;
+        if (fields && Array.isArray(fields)) {
+          fields.forEach((field) => {
+            if (!field || !field.name || !field.type) return;
+
+            const fieldObject: any = {
+              returnType: this.formatFieldType1(field.type),
+              required: field.type.kind === "NON_NULL",
+            };
+
+            // If the field has arguments, process them
+            if (field.args && Array.isArray(field.args)) {
+              const args = {};
+              field.args.forEach((arg) => {
+                if (!arg || !arg.name || !arg.type) return;
+                args[arg.name] = {
+                  type: this.formatFieldType1(arg.type),
+                  required: arg.type.kind === "NON_NULL",
+                };
+              });
+              fieldObject.args = args;
+            }
+
+            typeObject.fields[field.name] = fieldObject;
+          });
+        }
+      }
+
+      schemaJSON[type.name] = typeObject;
+    });
+
+    return schemaJSON;
+  };
+
+  private formatFieldType1 = (type: any): string => {
+    if (!type) return "Unknown";
+    if (type.kind === "NON_NULL") {
+      return this.formatFieldType1(type.ofType);
+    }
+    if (type.kind === "LIST") {
+      return `[${this.formatFieldType1(type.ofType)}]`;
+    }
+    return type.name || "Unknown";
+  };
+
+  /**
+   * Function to extract root-level queries and their nested fields from the formatted schema JSON.
+   */
+  extractRootQueries = (formattedSchemaJSON) => {
+    // Find the root Query type
+    const rootQuery = Object.entries(formattedSchemaJSON).find(
+      ([key, value]) => key === "Query" && value?.kind === "OBJECT",
+    );
+
+    if (!rootQuery) {
+      console.error("Root Query type not found in the schema.");
+      return {};
+    }
+
+    const rootQueryFields = rootQuery[1]?.fields || {};
+
+    // Track visited types to prevent infinite recursion
+    const visited = new Set();
+
+    /**
+     * Recursive function to extract nested fields.
+     */
+    const extractFields = (fieldType) => {
+      // Avoid infinite recursion for circular references
+      if (visited.has(fieldType)) {
+        return {}; // Skip if already visited
+      }
+      visited.add(fieldType);
+
+      const fieldTypeData = formattedSchemaJSON[fieldType];
+      if (!fieldTypeData || fieldTypeData.kind !== "OBJECT") {
+        return {};
+      }
+
+      const nestedFields = {};
+      Object.entries(fieldTypeData.fields || {}).forEach(
+        ([fieldName, fieldData]) => {
+          let fieldType = fieldData.returnType;
+          if (
+            fieldType &&
+            fieldType[0] === "[" &&
+            fieldType[fieldType.length - 1] === "]"
+          ) {
+            fieldType = fieldType.slice(1, fieldType.length - 1);
+          }
+          if (fieldType && formattedSchemaJSON[fieldType]?.fields) {
+            nestedFields[fieldName] = {
+              ...fieldData,
+              fields: extractFields(fieldType),
+            };
+          } else {
+            nestedFields[fieldName] = fieldData;
+          }
+        },
+      );
+
+      return nestedFields;
+    };
+
+    const queries = {};
+    Object.entries(rootQueryFields).forEach(([queryName, queryData]) => {
+      queries[queryName] = {
+        ...queryData,
+        fields: queryData.returnType ? extractFields(queryData.returnType) : {},
+      };
+    });
+
+    console.log("Extracted Root Queries:", queries);
+    return queries;
+  };
+
   /**
    *
    * @param _path - request path
@@ -521,6 +664,10 @@ class GraphqlExplorerViewModel {
       const responseBody = response.data.body;
       const parsedResponse = JSON.parse(responseBody);
       const formattedSchema = this.formatGraphQLSchema(parsedResponse.data);
+      const formattedSchemaJSON = this.parseSchemaToJSON(parsedResponse.data);
+      const rootQueries = this.extractRootQueries(formattedSchemaJSON);
+      console.log(formattedSchemaJSON);
+      console.log(rootQueries);
       progressiveTab.property.graphql.schema = formattedSchema;
       progressiveTab.property.graphql.state.isRequestSchemaFetched = true;
       this.tab = progressiveTab;

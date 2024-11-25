@@ -822,6 +822,11 @@ const makeHttpRequestV2 = async (
   signal?: AbortSignal,
 ) => {
   console.table({ url, method, headers, body, request });
+  console.log(url);
+  console.log(method);
+  console.log(headers);
+  console.log(body);
+  console.log(request);
   const startTime = performance.now();
 
   try {
