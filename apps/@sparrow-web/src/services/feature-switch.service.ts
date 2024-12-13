@@ -1,10 +1,12 @@
 import { getAuthHeaders, makeRequest } from "@app/containers/api/api.common";
-import constants from "@app/constants/constants";
+import { ConfigService } from "@app/utils/config";
 
 export class FeatureSwitchService {
   constructor() {}
 
-  private apiUrl: string = constants.API_URL;
+  private get apiUrl(): string {
+    return ConfigService.getApiUrl();
+  }
 
   /**
    * @description - fetches all features from db

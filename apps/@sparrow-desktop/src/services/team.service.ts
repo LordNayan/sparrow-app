@@ -3,21 +3,20 @@ import {
   getMultipartAuthHeaders,
   makeRequest,
 } from "@app/containers/api/api.common";
-import { TeamRepository } from "../repositories/team.repository";
-import { WorkspaceRepository } from "../repositories/workspace.repository";
-import constants from "@app/constants/constants";
+import { ConfigService } from "@app/utils/config";
 import type { InviteBody, TeamPostBody } from "@sparrow/common/dto/team-dto";
-const apiUrl: string = constants.API_URL;
+
 export class TeamService {
   constructor() {}
 
-  private teamRepository = new TeamRepository();
-  private workspaceRepository = new WorkspaceRepository();
+  private get apiUrl(): string {
+    return ConfigService.getApiUrl();
+  }
 
   public fetchTeams = async (userId: string) => {
     const response = await makeRequest(
       "GET",
-      `${apiUrl}/api/team/user/${userId}`,
+      `${this.apiUrl}/api/team/user/${userId}`,
       {
         headers: getAuthHeaders(),
       },
@@ -26,7 +25,7 @@ export class TeamService {
   };
 
   public createTeam = async (team: TeamPostBody) => {
-    const response = await makeRequest("POST", `${apiUrl}/api/team`, {
+    const response = await makeRequest("POST", `${this.apiUrl}/api/team`, {
       body: team,
       headers: getMultipartAuthHeaders(),
     });
@@ -34,17 +33,21 @@ export class TeamService {
   };
 
   public updateTeam = async (teamId: string, team: TeamPostBody) => {
-    const response = await makeRequest("PUT", `${apiUrl}/api/team/${teamId}`, {
-      body: team,
-      headers: getMultipartAuthHeaders(),
-    });
+    const response = await makeRequest(
+      "PUT",
+      `${this.apiUrl}/api/team/${teamId}`,
+      {
+        body: team,
+        headers: getMultipartAuthHeaders(),
+      },
+    );
     return response;
   };
 
   public leaveTeam = async (teamId: string) => {
     const response = await makeRequest(
       "PUT",
-      `${apiUrl}/api/team/${teamId}/leave`,
+      `${this.apiUrl}/api/team/${teamId}/leave`,
       {
         headers: getAuthHeaders(),
       },
@@ -58,7 +61,7 @@ export class TeamService {
   ) => {
     const response = await makeRequest(
       "POST",
-      `${apiUrl}/api/team/${teamId}/user`,
+      `${this.apiUrl}/api/team/${teamId}/user`,
       {
         body: inviteBody,
         headers: getAuthHeaders(),
@@ -70,7 +73,7 @@ export class TeamService {
   public removeMembersAtTeam = async (teamId: string, userId: string) => {
     const response = await makeRequest(
       "DELETE",
-      `${apiUrl}/api/team/${teamId}/user/${userId}`,
+      `${this.apiUrl}/api/team/${teamId}/user/${userId}`,
       {
         headers: getAuthHeaders(),
       },
@@ -81,7 +84,7 @@ export class TeamService {
   public promoteToAdminAtTeam = async (teamId: string, userId: string) => {
     const response = await makeRequest(
       "POST",
-      `${apiUrl}/api/team/${teamId}/admin/${userId}`,
+      `${this.apiUrl}/api/team/${teamId}/admin/${userId}`,
       {
         headers: getAuthHeaders(),
       },
@@ -92,7 +95,7 @@ export class TeamService {
   public demoteToMemberAtTeam = async (teamId: string, userId: string) => {
     const response = await makeRequest(
       "PUT",
-      `${apiUrl}/api/team/${teamId}/admin/${userId}`,
+      `${this.apiUrl}/api/team/${teamId}/admin/${userId}`,
       {
         headers: getAuthHeaders(),
       },
@@ -103,7 +106,7 @@ export class TeamService {
   public promoteToOwnerAtTeam = async (teamId: string, userId: string) => {
     const response = await makeRequest(
       "POST",
-      `${apiUrl}/api/team/${teamId}/owner/${userId}`,
+      `${this.apiUrl}/api/team/${teamId}/owner/${userId}`,
       {
         headers: getAuthHeaders(),
       },

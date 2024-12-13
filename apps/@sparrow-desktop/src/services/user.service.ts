@@ -1,14 +1,16 @@
 import { getAuthHeaders, makeRequest } from "@app/containers/api/api.common";
-import constants from "@app/constants/constants";
+import { ConfigService } from "@app/utils/config";
 import type { HttpClientResponseInterface } from "@app/types/http-client";
 
-const apiUrl: string = constants.API_URL;
 export class UserService {
   constructor() {}
+  private get apiUrl(): string {
+    return ConfigService.getApiUrl();
+  }
   public disableNewInviteTag = async (userId: string, teamId: string) => {
     const response: HttpClientResponseInterface = await makeRequest(
       "GET",
-      `${apiUrl}/api/team/${teamId}/user/${userId}/disableTeamNewInvite`,
+      `${this.apiUrl}/api/team/${teamId}/user/${userId}/disableTeamNewInvite`,
       {
         headers: getAuthHeaders(),
       },
@@ -29,7 +31,7 @@ export class UserService {
   ) => {
     const response: HttpClientResponseInterface = await makeRequest(
       "GET",
-      `${apiUrl}/api/workspace/${workspaceId}/user/${userId}/disableWorkspaceNewInvite`,
+      `${this.apiUrl}/api/workspace/${workspaceId}/user/${userId}/disableWorkspaceNewInvite`,
       {
         headers: getAuthHeaders(),
       },
@@ -46,7 +48,7 @@ export class UserService {
   public validateUserEmail = async (email: string) => {
     const response: HttpClientResponseInterface = await makeRequest(
       "GET",
-      `${apiUrl}/api/user/email/${email}`,
+      `${this.apiUrl}/api/user/email/${email}`,
       {
         headers: getAuthHeaders(),
       },

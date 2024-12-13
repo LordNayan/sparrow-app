@@ -1,10 +1,12 @@
 import { getAuthHeaders, makeRequest } from "@app/containers/api/api.common";
-import constants from "@app/constants/constants";
+import { ConfigService } from "@app/utils/config";
 
 export class TestflowService {
   constructor() {}
 
-  private apiUrl: string = constants.API_URL;
+  private get apiUrl(): string {
+    return ConfigService.getApiUrl();
+  }
 
   public fetchAllTestflow = async (workspaceId: string) => {
     const response = await makeRequest(
@@ -44,7 +46,7 @@ export class TestflowService {
         collectionId: string;
         folderId: string;
         method: string;
-        name: String;
+        name: string;
       };
     }[];
   }) => {

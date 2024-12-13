@@ -1,8 +1,8 @@
 import { getAuthHeaders } from "@app/containers/api/api.common";
-import constants from "@app/constants/constants";
 import type { StreamPromptDto } from "@sparrow/common/dto/ai-assistant";
 import { socketStore } from "../store/ws.store";
 import { io } from "socket.io-client";
+import { ConfigService } from "@app/utils/config";
 
 /**
  * Service for managing WebSocket connections and communication
@@ -10,7 +10,10 @@ import { io } from "socket.io-client";
  */
 export class AiAssistantWebSocketService {
   constructor() {}
-  private baseUrl: string = constants.BASE_URL;
+
+  private get baseUrl(): string {
+    return ConfigService.getApiUrl();
+  }
 
   /**
    * Connects to the AI Assistant WebSocket server.

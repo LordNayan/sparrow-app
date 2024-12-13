@@ -29,6 +29,7 @@
   import { Input } from "@sparrow/library/forms";
   import { open } from "@tauri-apps/plugin-shell";
   import constants from "@app/constants/constants";
+  import { ConfigService } from "@app/utils/config";
   import { Tooltip } from "@sparrow/library/ui";
   import MixpanelEvent from "@app/utils/mixpanel/MixpanelEvent";
   import {
@@ -136,6 +137,17 @@
   const externalSparrowGithub = constants.SPARROW_GITHUB;
 
   let collectionFilter: any = [];
+
+  let newUrl = "";
+  let newUrl1 = "";
+
+  const updateApiUrl = async () => {
+    newUrl1 = newUrl;
+    // Update the apiUrl writable store
+    ConfigService.setApiUrl(newUrl);
+    console.log("API URL updated to:", ConfigService.getApiUrl());
+  };
+
   /**
    * @description - performs searching on a single collection
    */
@@ -554,6 +566,10 @@
         {/if}
       {/if}
     </div>
+
+    <input type="text" bind:value={newUrl} placeholder="Enter new API URL" />
+    <button on:click={updateApiUrl}>Update API URL</button>
+    <p>Current API URL: {newUrl1}</p>
 
     <!-- LHS Side of Collection Enivironment & Test Flows -->
     <div

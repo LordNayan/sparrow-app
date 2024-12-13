@@ -1,11 +1,13 @@
 import { getAuthHeaders, makeRequest } from "@app/containers/api/api.common";
-import constants from "@app/constants/constants";
+import { ConfigService } from "@app/utils/config";
 import type { PromptDto } from "@sparrow/common/dto/ai-assistant";
 
 export class AiAssistantService {
   constructor() {}
 
-  private apiUrl: string = constants.API_URL;
+  private get apiUrl(): string {
+    return ConfigService.getApiUrl();
+  }
 
   public generateAiResponse = async (_prompt: PromptDto) => {
     const response = await makeRequest(

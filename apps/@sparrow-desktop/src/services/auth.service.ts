@@ -6,11 +6,13 @@ import type {
   resetPasswordPostBody,
 } from "@sparrow/common/dto";
 import { makeRequest, getRefHeaders } from "@app/containers/api/api.common";
-import constants from "@app/constants/constants";
-const apiUrl: string = constants.API_URL;
+import { ConfigService } from "@app/utils/config";
+const apiUrl = () => {
+  return ConfigService.getApiUrl();
+};
 
 const registerUser = async (userInfo: registerUserPostBody) => {
-  const response = await makeRequest("POST", `${apiUrl}/api/user`, {
+  const response = await makeRequest("POST", `${apiUrl()}/api/user`, {
     body: userInfo,
   });
 
@@ -18,14 +20,14 @@ const registerUser = async (userInfo: registerUserPostBody) => {
 };
 
 const loginUser = async (userInfo: loginUserPostBody) => {
-  const response = await makeRequest("POST", `${apiUrl}/api/auth/login`, {
+  const response = await makeRequest("POST", `${apiUrl()}/api/auth/login`, {
     body: userInfo,
   });
   return response;
 };
 
 const loginWithGoogle = async () => {
-  const response = await makeRequest("GET", `${apiUrl}/api/auth/google`, {
+  const response = await makeRequest("GET", `${apiUrl()}/api/auth/google`, {
     headers: getRefHeaders(),
   });
 
@@ -35,7 +37,7 @@ const loginWithGoogle = async () => {
 const forgotPassword = async (emailInfo: EmailPostBody) => {
   const response = await makeRequest(
     "POST",
-    `${apiUrl}/api/user/send-verification-email`,
+    `${apiUrl()}/api/user/send-verification-email`,
     {
       body: emailInfo,
     },
@@ -47,7 +49,7 @@ const forgotPassword = async (emailInfo: EmailPostBody) => {
 const verifyEmail = async (verifyInfo: verifyPostbody) => {
   const response = await makeRequest(
     "POST",
-    `${apiUrl}/api/user/verify-email`,
+    `${apiUrl()}/api/user/verify-email`,
     {
       body: verifyInfo,
     },
@@ -58,7 +60,7 @@ const verifyEmail = async (verifyInfo: verifyPostbody) => {
 const resetPassword = async (changePasswordBody: resetPasswordPostBody) => {
   const response = await makeRequest(
     "POST",
-    `${apiUrl}/api/user/change-password`,
+    `${apiUrl()}/api/user/change-password`,
     {
       body: changePasswordBody,
     },
@@ -67,7 +69,7 @@ const resetPassword = async (changePasswordBody: resetPasswordPostBody) => {
 };
 
 const userLogout = async () => {
-  const response = await makeRequest("GET", `${apiUrl}/api/user/logout`, {
+  const response = await makeRequest("GET", `${apiUrl()}/api/user/logout`, {
     headers: getRefHeaders(),
   });
   return response;
@@ -76,7 +78,7 @@ const userLogout = async () => {
 const refreshToken = async () => {
   const response = await makeRequest(
     "POST",
-    `${apiUrl}/api/auth/refresh-token`,
+    `${apiUrl()}/api/auth/refresh-token`,
     {
       headers: getRefHeaders(),
     },

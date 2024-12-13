@@ -1,5 +1,5 @@
 import { getAuthHeaders, makeRequest } from "@app/containers/api/api.common";
-import constants from "@app/constants/constants";
+import { ConfigService } from "@app/utils/config";
 import type {
   CreateEnvironmentPostBody,
   UpdateEnvironmentPostBody,
@@ -8,7 +8,9 @@ import type {
 export class EnvironmentService {
   constructor() {}
 
-  private apiUrl: string = constants.API_URL;
+  private get apiUrl(): string {
+    return ConfigService.getApiUrl();
+  }
 
   public fetchAllEnvironments = async (workspaceId: string) => {
     const response = await makeRequest(

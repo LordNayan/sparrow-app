@@ -2,13 +2,17 @@ import {
   getMultipartAuthHeaders,
   makeRequest,
 } from "@app/containers/api/api.common";
-import constants from "@app/constants/constants";
-const apiUrl: string = constants.API_URL;
+import { ConfigService } from "@app/utils/config";
+
 export class FeedbackService {
   constructor() {}
 
+  private get apiUrl(): string {
+    return ConfigService.getApiUrl();
+  }
+
   public createFeedback = async (feedback) => {
-    const response = await makeRequest("POST", `${apiUrl}/api/feedback`, {
+    const response = await makeRequest("POST", `${this.apiUrl}/api/feedback`, {
       body: feedback,
       headers: getMultipartAuthHeaders(),
     });
@@ -18,7 +22,7 @@ export class FeedbackService {
   public fetchuploads = async (feedback) => {
     const response = await makeRequest(
       "POST",
-      `${apiUrl}/api/feedback/uploads`,
+      `${this.apiUrl}/api/feedback/uploads`,
       {
         body: feedback,
         headers: getMultipartAuthHeaders(),

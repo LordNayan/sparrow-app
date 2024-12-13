@@ -1,4 +1,4 @@
-import constants from "@app/constants/constants";
+import { ConfigService } from "@app/utils/config";
 import { makeRequest, getAuthHeaders } from "@app/containers/api/api.common";
 import type {
   WorkspacePostBody,
@@ -8,14 +8,16 @@ import type {
 import type { WorkspaceRole } from "@sparrow/common/enums";
 import type { HttpClientResponseInterface } from "@app/types/http-client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const apiUrl: string = constants.API_URL;
 
 export class WorkspaceService {
   constructor() {}
+  private apiUrl(): string {
+    return ConfigService.getApiUrl();
+  }
   public fetchWorkspaces = async (userId: string) => {
     const response = await makeRequest(
       "GET",
-      `${apiUrl}/api/workspace/user/${userId}`,
+      `${this.apiUrl}/api/workspace/user/${userId}`,
       {
         headers: getAuthHeaders(),
       },
@@ -26,7 +28,7 @@ export class WorkspaceService {
   public fetchTeamsWorkspaces = async (teamId: string) => {
     const response = await makeRequest(
       "GET",
-      `${apiUrl}/api/workspace/team/${teamId}`,
+      `${this.apiUrl}/api/workspace/team/${teamId}`,
       {
         headers: getAuthHeaders(),
       },
@@ -39,7 +41,7 @@ export class WorkspaceService {
   ) => {
     const response = await makeRequest(
       "PUT",
-      `${apiUrl}/api/workspace/${workspaceId}`,
+      `${this.apiUrl}/api/workspace/${workspaceId}`,
       {
         body: workspace,
         headers: getAuthHeaders(),
@@ -53,7 +55,7 @@ export class WorkspaceService {
   ): Promise<HttpClientResponseInterface> => {
     const response: HttpClientResponseInterface = await makeRequest(
       "DELETE",
-      `${apiUrl}/api/workspace/${workspaceId}`,
+      `${this.apiUrl}/api/workspace/${workspaceId}`,
       {
         headers: getAuthHeaders(),
       },
@@ -62,7 +64,7 @@ export class WorkspaceService {
   };
 
   public createWorkspace = async (workspace: WorkspacePostBody) => {
-    const response = await makeRequest("POST", `${apiUrl}/api/workspace`, {
+    const response = await makeRequest("POST", `${this.apiUrl}/api/workspace`, {
       body: workspace,
       headers: getAuthHeaders(),
     });
@@ -75,7 +77,7 @@ export class WorkspaceService {
   ) => {
     const response = await makeRequest(
       "POST",
-      `${apiUrl}/api/workspace/${workspaceId}/user`,
+      `${this.apiUrl}/api/workspace/${workspaceId}/user`,
       {
         body: addUsersInWorkspaceDto,
         headers: getAuthHeaders(),
@@ -88,7 +90,7 @@ export class WorkspaceService {
     if (workspaceId) {
       const response = await makeRequest(
         "GET",
-        `${apiUrl}/api/workspace/${workspaceId}/users`,
+        `${this.apiUrl}/api/workspace/${workspaceId}/users`,
         {
           headers: getAuthHeaders(),
         },
@@ -104,7 +106,7 @@ export class WorkspaceService {
   ): Promise<HttpClientResponseInterface> => {
     const response: HttpClientResponseInterface = await makeRequest(
       "PUT",
-      `${apiUrl}/api/workspace/${workspaceId}/user/${userId}`,
+      `${this.apiUrl}/api/workspace/${workspaceId}/user/${userId}`,
       {
         body: { role },
         headers: getAuthHeaders(),
@@ -119,7 +121,7 @@ export class WorkspaceService {
   ): Promise<HttpClientResponseInterface> => {
     const response: HttpClientResponseInterface = await makeRequest(
       "DELETE",
-      `${apiUrl}/api/workspace/${workspaceId}/user/${userId}`,
+      `${this.apiUrl}/api/workspace/${workspaceId}/user/${userId}`,
       {
         headers: getAuthHeaders(),
       },

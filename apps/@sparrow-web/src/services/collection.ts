@@ -1,9 +1,5 @@
-import constants from "@app/constants/constants";
-import {
-  makeRequest,
-  getAuthHeaders,
-  makeHttpRequest,
-} from "@app/containers/api/api.common";
+import { ConfigService } from "@app/utils/config";
+import { makeRequest, getAuthHeaders } from "@app/containers/api/api.common";
 
 import type {
   CreateApiRequestPostBody,
@@ -20,12 +16,14 @@ import type {
 // } from "@app/store/auth.store/api-request";
 // import { keyStore, valueStore } from "@app/store/auth.store/parameter";
 
-const apiUrl: string = constants.API_URL;
+const apiUrl = () => {
+  return ConfigService.getApiUrl();
+};
 
 const fetchCollection = async (workspaceId: string) => {
   const response = await makeRequest(
     "GET",
-    `${apiUrl}/api/collection/${workspaceId}`,
+    `${apiUrl()}/api/collection/${workspaceId}`,
     {
       headers: getAuthHeaders(),
     },
@@ -40,7 +38,7 @@ const insertCollectionDirectory = async (
 ) => {
   const response = await makeRequest(
     "POST",
-    `${apiUrl}/api/collection/${collectionId}/workspace/${workspaceId}/folder`,
+    `${apiUrl()}/api/collection/${collectionId}/workspace/${workspaceId}/folder`,
     {
       body: directory,
       headers: getAuthHeaders(),
@@ -54,7 +52,7 @@ const insertCollectionRequest = async (
 ) => {
   const response = await makeRequest(
     "POST",
-    `${apiUrl}/api/collection/request`,
+    `${apiUrl()}/api/collection/request`,
     {
       body: apiRequest,
       headers: getAuthHeaders(),
@@ -71,7 +69,7 @@ const updateCollectionRequest = async (
 ) => {
   const response = await makeRequest(
     "PUT",
-    `${apiUrl}/api/collection/request/${id}`,
+    `${apiUrl()}/api/collection/request/${id}`,
     {
       body: apiRequest,
       headers: getAuthHeaders(),
@@ -84,7 +82,7 @@ const updateCollectionRequest = async (
 const insertCollection: (
   collection: CreateCollectionPostBody,
 ) => Promise<any> = async (collection) => {
-  const response = await makeRequest("POST", `${apiUrl}/api/collection`, {
+  const response = await makeRequest("POST", `${apiUrl()}/api/collection`, {
     body: collection,
     headers: getAuthHeaders(),
   });
@@ -94,7 +92,7 @@ const insertCollection: (
 // collection  to create files and folder
 // const createCollectionEntry = async (collectionId :string, workspaceId: string) =>{
 //   const response = await post(
-//     `${apiUrl}/api/collection/${collectionId}`,
+//     `${apiUrl()}/api/collection/${collectionId}`,
 //     {
 //       collectionId, workspaceId
 //     },
@@ -108,7 +106,7 @@ const insertCollection: (
 //   data: WorkspacePostBody,
 // ) => {
 //   const response = await put(
-//     `${apiUrl}/api/workspace/${workspaceId}`,
+//     `${apiUrl()}/api/workspace/${workspaceId}`,
 //     data,
 //     getUserToken,
 //   );
@@ -117,14 +115,14 @@ const insertCollection: (
 
 // const deleteWorkspace = async (workspaceId: string) => {
 //   const response = await del(
-//     `${apiUrl}/api/workspace/${workspaceId}`,
+//     `${apiUrl()}/api/workspace/${workspaceId}`,
 //     getUserToken,
 //   );
 //   return response;
 // };
 
 // const createWorkspace = async (data: WorkspacePostBody) => {
-//   const response = await post(`${apiUrl}/api/workspace`, data, getUserToken);
+//   const response = await post(`${apiUrl()}/api/workspace`, data, getUserToken);
 //   return response;
 // };
 

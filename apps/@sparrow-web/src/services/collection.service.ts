@@ -6,7 +6,7 @@ import {
   // sendSocketIoMessage,
 } from "@app/containers/api/api.common";
 import { CollectionRepository } from "../repositories/collection.repository";
-import constants from "@app/constants/constants";
+import { ConfigService } from "@app/utils/config";
 import type {
   CreateApiRequestPostBody,
   CreateCollectionPostBody,
@@ -22,7 +22,6 @@ import type {
   HttpClientResponseInterface,
 } from "@app/types/http-client";
 import {
-  CollectionItemTypeDtoEnum,
   type CollectionDtoInterface,
   type CollectionItemDtoInterface,
 } from "@sparrow/common/types/workspace/collection-dto";
@@ -44,7 +43,9 @@ import type { HttpRequestAuthModeBaseEnum } from "@sparrow/common/types/workspac
 export class CollectionService {
   constructor() {}
 
-  private apiUrl: string = constants.API_URL;
+  private get apiUrl(): string {
+    return ConfigService.getApiUrl();
+  }
   private collectionRepository = new CollectionRepository();
 
   public fetchCollection = async (workspaceId: string) => {

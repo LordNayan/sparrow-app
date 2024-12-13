@@ -1,8 +1,11 @@
 import { getAuthHeaders, makeRequest } from "@app/containers/api/api.common";
-import constants from "@app/constants/constants";
-const apiUrl: string = constants.API_URL;
+import { ConfigService } from "@app/utils/config";
+
 export class UpdatesService {
   constructor() {}
+  private get apiUrl(): string {
+    return ConfigService.getApiUrl();
+  }
   /**
    * Retrieves updates for a specified workspace and page number from the API.
    *
@@ -24,7 +27,7 @@ export class UpdatesService {
   public getUpdates = async (workspaceId: string, pageNumber: string) => {
     const response = await makeRequest(
       "GET",
-      `${apiUrl}/api/updates/${workspaceId}/page/${pageNumber}`,
+      `${this.apiUrl}/api/updates/${workspaceId}/page/${pageNumber}`,
       {
         headers: getAuthHeaders(),
       },
