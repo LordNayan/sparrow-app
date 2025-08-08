@@ -214,31 +214,35 @@
             const params = new URLSearchParams(token.split("?")[1]);
             const accessToken = params.get("accessToken");
             const refreshToken = params.get("refreshToken");
-            const userDetails = jwtDecode(accessToken);
-
-            identifyUser(userDetails.email);
-            const apiUrl = constants.API_URL;
-            const userId = userDetails?._id;
-            const userEmail = userDetails?.email;
-            if (!userEmail || !userId || !accessToken || !refreshToken) {
-              isTokenErrorMessage = true;
-              return;
-            }
-            try {
-              isTokenValidationLoading = true;
-              await axios({
-                method: "GET",
-                url: `${apiUrl}/api/team/user/${userId}`,
-                headers: {
-                  Authorization: `Bearer ${accessToken}`,
-                },
-              });
-              isTokenErrorMessage = false;
-              _viewModel.handleAccountLogin(token);
-            } catch (e) {
-              isTokenErrorMessage = true;
-            } finally {
-              isTokenValidationLoading = false;
+            if (accessToken) {
+              const userDetails = jwtDecode(accessToken);
+              identifyUser(
+                userDetails._id || userDetails.email,
+                userDetails.email,
+              );
+              const apiUrl = constants.API_URL;
+              const userId = userDetails?._id;
+              const userEmail = userDetails?.email;
+              if (!userEmail || !userId || !accessToken || !refreshToken) {
+                isTokenErrorMessage = true;
+                return;
+              }
+              try {
+                isTokenValidationLoading = true;
+                await axios({
+                  method: "GET",
+                  url: `${apiUrl}/api/team/user/${userId}`,
+                  headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                  },
+                });
+                isTokenErrorMessage = false;
+                _viewModel.handleAccountLogin(token);
+              } catch (e) {
+                isTokenErrorMessage = true;
+              } finally {
+                isTokenValidationLoading = false;
+              }
             }
           }}
           id="create_account_or_sign_in"

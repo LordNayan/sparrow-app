@@ -55,46 +55,58 @@ export class AuthViewModel {
     }
   };
 
-  public handleAccountLogin = async(url: string) => {
-  const params = new URLSearchParams(url.split("?")[1]);
-  const accessToken = params.get("accessToken");
-  const refreshToken = params.get("refreshToken");
-  const event = params.get("event");
-  const method = params.get("method");
+  public handleAccountLogin = async (url: string) => {
+    const params = new URLSearchParams(url.split("?")[1]);
+    const accessToken = params.get("accessToken");
+    const refreshToken = params.get("refreshToken");
+    const event = params.get("event");
+    const method = params.get("method");
 
-  if (accessToken && refreshToken) {
-    const userDetails = jwtDecode(accessToken);
-    
-    identifyUser(userDetails.email);
-    setAuthJwt(constants.AUTH_TOKEN, accessToken);
-    setAuthJwt(constants.REF_TOKEN, refreshToken);
-    setUser(jwtDecode(accessToken));
-    this.sendUserDataToMixpanel(userDetails);
+    if (accessToken && refreshToken) {
+      const userDetails = jwtDecode(accessToken);
 
-    notifications.success("You're logged in successfully.");
-    if (event === "register") {
-      navigate("/app/collections?first=true");
-      isUserFirstSignUp.set(true);
-      MixpanelEvent(Events.USER_SIGNUP, {
-        method: method,
-        Success: true,
-      });
-      await this.guideRepository.insert({ isActive: true, id: "environment-guide" });
-      await this.guideRepository.insert({ isActive: true, id: "collection-guide" });
-      isFirstTimeInTestFlow.set(true);
+      identifyUser(userDetails._id || userDetails.email, userDetails.email);
+      setAuthJwt(constants.AUTH_TOKEN, accessToken);
+      setAuthJwt(constants.REF_TOKEN, refreshToken);
+      setUser(jwtDecode(accessToken));
+      this.sendUserDataToMixpanel(userDetails);
+
+      notifications.success("You're logged in successfully.");
+      if (event === "register") {
+        navigate("/app/collections?first=true");
+        isUserFirstSignUp.set(true);
+        MixpanelEvent(Events.USER_SIGNUP, {
+          method: method,
+          Success: true,
+        });
+        await this.guideRepository.insert({
+          isActive: true,
+          id: "environment-guide",
+        });
+        await this.guideRepository.insert({
+          isActive: true,
+          id: "collection-guide",
+        });
+        isFirstTimeInTestFlow.set(true);
+      } else {
+        navigate("/app/collections?first=false");
+        MixpanelEvent(Events.USER_LOGIN, {
+          method: method,
+          Success: true,
+        });
+        await this.guideRepository.insert({
+          isActive: false,
+          id: "environment-guide",
+        });
+        await this.guideRepository.insert({
+          isActive: false,
+          id: "collection-guide",
+        });
+      }
     } else {
-      navigate("/app/collections?first=false");
-      MixpanelEvent(Events.USER_LOGIN, {
-        method: method,
-        Success: true,
-      });
-      await this.guideRepository.insert({ isActive: false, id: "environment-guide" });
-      await this.guideRepository.insert({ isActive: false, id: "collection-guide" });
+      console.error("acces token and refresh token not found!");
     }
-  } else {
-    console.error("acces token and refresh token not found!");
-  }
-}
+  };
 
   /**
    * create dummy team and workspace for guest user

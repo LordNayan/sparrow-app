@@ -499,7 +499,7 @@ export async function handleLogin(url: string) {
   if (existingGuestUser?.isGuestUser) {
     await clearLocalDB();
   }
-  identifyUser(userDetails.email);
+  identifyUser(userDetails._id || userDetails.email, userDetails.email);
   setAuthJwt(constants.AUTH_TOKEN, accessToken);
   setAuthJwt(constants.REF_TOKEN, refreshToken);
   setUser(jwtDecode(accessToken));

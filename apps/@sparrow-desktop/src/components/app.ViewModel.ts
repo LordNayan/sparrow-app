@@ -11,14 +11,14 @@ import { TabRepository } from "../repositories/tab.repository";
 import { navigate } from "svelte-navigator";
 import { platform } from "@tauri-apps/plugin-os";
 import { v4 as uuidv4 } from "uuid";
-import { isGuestUserActive, setUser } from "@app/store/auth.store";
+import { setUser } from "@app/store/auth.store";
 import MixpanelEvent from "@app/utils/mixpanel/MixpanelEvent";
 import { Events } from "@sparrow/common/enums";
 import { TeamRepository } from "@app/repositories/team.repository";
 import { GuideRepository } from "@app/repositories/guide.repository";
 import { WorkspaceTabAdapter } from "@app/adapter/workspace-tab";
 import * as Sentry from "@sentry/svelte";
-import {policyConfig} from "@sparrow/common/store"
+import { policyConfig } from "@sparrow/common/store";
 import { TeamService } from "@app/services/team.service";
 import { WorkspaceService } from "@app/services/workspace.service";
 import { identifyUser } from "@app/utils/posthog/posthogConfig";
@@ -42,8 +42,7 @@ export class AppViewModel {
   private guideRepository = new GuideRepository();
   private teamService = new TeamService();
   private workspaceService = new WorkspaceService();
-  
-  
+
   /**
    * sync workspace data with backend server
    * @param userId User id
@@ -114,7 +113,7 @@ export class AppViewModel {
     }
   };
 
-   /**
+  /**
    * sync teams data with backend server
    * @param userId User id
    */
@@ -146,7 +145,7 @@ export class AppViewModel {
           updatedAt,
           updatedBy,
           isNewInvite,
-          billing
+          billing,
         } = elem;
         const updatedWorkspaces = workspaces?.map((workspace) => ({
           workspaceId: workspace.id,
@@ -175,7 +174,7 @@ export class AppViewModel {
           updatedBy,
           isNewInvite,
           isOpen: isOpenTeam,
-          billing
+          billing,
         };
         data.push(item);
       }
@@ -198,11 +197,11 @@ export class AppViewModel {
     let res = await this.workspaceRepository.readWorkspace(id);
     if (!res) {
       const userId = getClientUser().id;
-      if(userId){
+      if (userId) {
         await Promise.all([
-              this.refreshTeams(userId),
-              this.refreshWorkspaces(userId),
-            ]);
+          this.refreshTeams(userId),
+          this.refreshWorkspaces(userId),
+        ]);
       }
       await new Sleep().setTime(1000).exec();
       res = await this.workspaceRepository.readWorkspace(id);
@@ -214,7 +213,6 @@ export class AppViewModel {
     navigate("collections");
   };
   private triggerAccessDeniedModal;
-
 
   constructor(_triggerAccessDeniedModal) {
     this.triggerAccessDeniedModal = _triggerAccessDeniedModal;
@@ -261,7 +259,6 @@ export class AppViewModel {
     return true;
   }
 
-
   private sendUserDataToMixpanel = (userDetails) => {
     if (constants.ENABLE_MIX_PANEL === "true") {
       mixpanel.identify(userDetails._id);
@@ -269,9 +266,7 @@ export class AppViewModel {
     }
   };
 
-
-
-  private handleAccountLogin = async(url: string) => {
+  private handleAccountLogin = async (url: string) => {
     const params = new URLSearchParams(url.split("?")[1]);
     const accessToken = params.get("accessToken");
     const refreshToken = params.get("refreshToken");
@@ -280,8 +275,8 @@ export class AppViewModel {
 
     if (accessToken && refreshToken) {
       const userDetails = jwtDecode(accessToken);
-      
-      identifyUser(userDetails.email);
+
+      identifyUser(userDetails._id || userDetails.email, userDetails.email);
       setAuthJwt(constants.AUTH_TOKEN, accessToken);
       setAuthJwt(constants.REF_TOKEN, refreshToken);
       setUser(jwtDecode(accessToken));
@@ -295,8 +290,14 @@ export class AppViewModel {
           method: method,
           Success: true,
         });
-        await this.guideRepository.insert({ isActive: true, id: "environment-guide" });
-        await this.guideRepository.insert({ isActive: true, id: "collection-guide" });
+        await this.guideRepository.insert({
+          isActive: true,
+          id: "environment-guide",
+        });
+        await this.guideRepository.insert({
+          isActive: true,
+          id: "collection-guide",
+        });
         isFirstTimeInTestFlow.set(true);
       } else {
         navigate("/app/collections?first=false");
@@ -304,13 +305,19 @@ export class AppViewModel {
           method: method,
           Success: true,
         });
-        await this.guideRepository.insert({ isActive: false, id: "environment-guide" });
-        await  this.guideRepository.insert({ isActive: false, id: "collection-guide" });
+        await this.guideRepository.insert({
+          isActive: false,
+          id: "environment-guide",
+        });
+        await this.guideRepository.insert({
+          isActive: false,
+          id: "collection-guide",
+        });
       }
     } else {
       console.error("acces token and refresh token not found!");
     }
-  }
+  };
 
   /**
    *
@@ -326,16 +333,18 @@ export class AppViewModel {
 
   private enqueue = (url: string, handler: (url: string) => Promise<void>) => {
     // Chain the promises sequentially
-      this.queue = this.queue.then(() => handler(url)).catch((e) => {
-        console.error('Error processing deep link:', e);
+    this.queue = this.queue
+      .then(() => handler(url))
+      .catch((e) => {
+        console.error("Error processing deep link:", e);
       });
 
-      return this.queue;
-  }
+    return this.queue;
+  };
 
-  private  handleIncomingDeepLink = (url: string)  => {
+  private handleIncomingDeepLink = (url: string) => {
     this.enqueue(url, (link) => this.processDeepLink(link));
-  }
+  };
 
   private async processDeepLink(url: string): Promise<void> {
     try {
@@ -346,84 +355,85 @@ export class AppViewModel {
       const isSparrowEdge = params.get("isSparrowEdge");
       const tokens = getAuthJwt();
 
-       const guestUser = await this.guestUserRepository.findOne({
-          name: "guestUser",
-        });
-          // Get current policy settings
+      const guestUser = await this.guestUserRepository.findOne({
+        name: "guestUser",
+      });
+      // Get current policy settings
       let policySettings: any;
-      policyConfig.subscribe(value => {
+      policyConfig.subscribe((value) => {
         policySettings = value;
       })();
 
       const isGuestUser = guestUser?.getLatest()?.toMutableJSON()?.isGuestUser;
       if (isGuestUser) {
         // 1. desktop app status guest
-        if(isSparrowEdge){
+        if (isSparrowEdge) {
           // desktop and web both on guest user
           // show access denied (can't open web guest account to desktop)
-            this.triggerAccessDeniedModal(true);
-              return;
-        }else if(currentUserAccessToken){
+          this.triggerAccessDeniedModal(true);
+          return;
+        } else if (currentUserAccessToken) {
           // desktop is guest and web app is loogedIn
           // show access denied (logout desktop first to proceed)
-            this.triggerAccessDeniedModal(true);
-              return;
+          this.triggerAccessDeniedModal(true);
+          return;
         }
         return;
-      }else if(tokens[0]){
+      } else if (tokens[0]) {
         // 2. desktop is currently  logged in.
-        if(isSparrowEdge){
+        if (isSparrowEdge) {
           // desktop is loggedIn and web is guest
           // show access denied (cant open web guest account to desktop)
+          this.triggerAccessDeniedModal(true);
+          return;
+        } else if (currentUserAccessToken) {
+          const isValidUser = await this.validateUserAccess(
+            currentUserAccessToken,
+          );
+          if (!isValidUser) {
+            // different account logged in on desktop and web
+            // show access denied (logout desktop first to proceed)
             this.triggerAccessDeniedModal(true);
-              return;
-        }else if(currentUserAccessToken){
-            const isValidUser = await this.validateUserAccess(currentUserAccessToken);
-            if (!isValidUser) {
-              // different account logged in on desktop and web
-              // show access denied (logout desktop first to proceed)
-              this.triggerAccessDeniedModal(true);
-              return;
-            }else{
-              // same account logged in on desktop and web
-               if (workspaceId) {
-                  await this.workspaceSwitcher(workspaceId as string);
-                }
-                return;
+            return;
+          } else {
+            // same account logged in on desktop and web
+            if (workspaceId) {
+              await this.workspaceSwitcher(workspaceId as string);
             }
+            return;
+          }
         }
-        
-      }else{
+      } else {
         // desktop app status identity
-        if(isSparrowEdge){
+        if (isSparrowEdge) {
           // desktop is identity and web is guest account
           // show access denied (cant open web guest account to desktop)
 
-            
-              return;
-        }else if(currentUserAccessToken){
-           // login successful
-            if (policySettings.enableLogin) {
-              await this.handleAccountLogin(url);
-               if (workspaceId) {
-                   await new Sleep().setTime(4000).exec();
-                   await this.workspaceSwitcher(workspaceId as string);
-               }
+          return;
+        } else if (currentUserAccessToken) {
+          // login successful
+          if (policySettings.enableLogin) {
+            await this.handleAccountLogin(url);
+            if (workspaceId) {
+              await new Sleep().setTime(4000).exec();
+              await this.workspaceSwitcher(workspaceId as string);
             }
-            else{
-                console.error("Sign-in has been disabled by organization policy");
-            }
-            return;
+          } else {
+            console.error("Sign-in has been disabled by organization policy");
+          }
+          return;
         }
       }
-  
     } catch (error) {
       Sentry.captureException(error);
       console.error(error);
     }
   }
 
-  private throttleHandleIncomingDeepLink = new Throttle(this.handleIncomingDeepLink as any, 1000);
+  private throttleHandleIncomingDeepLink = new Throttle(
+    this.handleIncomingDeepLink as any,
+    1000,
+  );
 
   // Private platform-specific handlers
   private deepLinkHandlerWindows = async (
