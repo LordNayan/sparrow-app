@@ -65,7 +65,6 @@ jobs:
           .\rustup-init.exe -y
           rustup install 1.82.0
           rustup default 1.82.0
-
       # Set up DigiCert certificate for cloud signing
       - name: Set up DigiCert certificate
         shell: pwsh
@@ -73,7 +72,6 @@ jobs:
           Write-Host "Decoding DigiCert .p12 into D:\Certificate_pkcs12.p12"
           $bytes = [Convert]::FromBase64String("${{ secrets.SM_CLIENT_CERT_FILE_B64 }}")
           [IO.File]::WriteAllBytes("D:\Certificate_pkcs12.p12", $bytes)
-
       # Set environment variables for DigiCert
       - name: Set variables
         id: variables
@@ -128,7 +126,6 @@ jobs:
           smctl windows certsync `
             --keypair-alias="$($env:KEYPAIR_ALIAS)" `
             --store=system
-
       # --- STAGE 2: BUILD APP ---
       - name: Update updater endpoint in tauri.conf.json file
         run: |
@@ -168,7 +165,6 @@ jobs:
         run: |
           $confPath = "apps/@sparrow-desktop/src-tauri/tauri.conf.json"
           $json = Get-Content $confPath -Raw | ConvertFrom-Json
-
           if ($null -ne $json.bundle) {
             if (-not ($json.bundle.PSObject.Properties.Name -contains "createUpdaterArtifacts")) {
               $json.bundle | Add-Member -NotePropertyName "createUpdaterArtifacts" -NotePropertyValue $true
@@ -177,7 +173,6 @@ jobs:
               # enforce correct value in case it exists but is false
               $json.bundle.createUpdaterArtifacts = $true
             }
-
             $json | ConvertTo-Json -Depth 20 | Set-Content $confPath -Encoding UTF8
           }
         shell: pwsh
@@ -206,11 +201,9 @@ jobs:
           
           Write-Host "✅ signtool.exe found at $($signtool.FullName)"
           Write-Host "✅ MakeAppx.exe found at $($makeappx.FullName)"
-
           # Export paths for later steps
           echo "SIGNTOOL_PATH=$($signtool.FullName)" >> $env:GITHUB_ENV
           echo "MAKEAPPX_PATH=$($makeappx.FullName)" >> $env:GITHUB_ENV
-
       - name: Find and Sign MSI files
         shell: pwsh
         run: |
@@ -234,11 +227,9 @@ jobs:
           }
           
           $signtoolPath = $env:SIGNTOOL_PATH.Trim()
-
           # Sign each MSI file found
           foreach ($msiFile in $msiFiles) {
             Write-Host "🔐 Signing: $($msiFile.FullName)"
-
             & "$signtoolPath" sign `
               /sm /s My `
               /tr http://timestamp.digicert.com `
@@ -254,7 +245,6 @@ jobs:
             
             Write-Host "✅ Successfully signed $($msiFile.Name)"
           }
-
       - name: Regenerate MSI updater signature after signing MSI
         run: |
           $msiPath = "D:\a\sparrow-app\sparrow-app\apps\@sparrow-desktop\src-tauri\target\debug\bundle\msi"
@@ -283,13 +273,11 @@ jobs:
             Write-Host "❌ No EXE files found in $bundlePath"
             exit 1
           }
-
           $signtoolPath = $env:SIGNTOOL_PATH.Trim()
           
           # Sign each EXE file found
           foreach ($exeFile in $exeFiles) {
             Write-Host "🔐 Signing: $($exeFile.FullName)"
-
             & "$signtoolPath" sign `
               /sm /s My `
               /tr http://timestamp.digicert.com `
@@ -336,7 +324,6 @@ jobs:
           }
           
           Write-Host "🎉 MSI and EXE files successfully signed and verified"
-
       # --- STAGE 4: CONVERT TO MSIX USING MAKEAPPX ---
       - name: Prepare App Folder for MakeAppx
         run: |
@@ -344,7 +331,6 @@ jobs:
           $msiPath = Get-ChildItem -Path "apps/@sparrow-desktop/src-tauri/target/debug/bundle/msi" -Filter "Sparrow_*_x64_en-US.msi" | Select-Object -First 1
           $extractPath = "app-root"
           Start-Process msiexec.exe -ArgumentList "/a `"$msiPath`" /qn TARGETDIR=`"$extractPath`"" -Wait -NoNewWindow
-
           #Copy app executable (MakeAppx requires it)
           $exeSource = Get-ChildItem -Path "apps/@sparrow-desktop/src-tauri/target/debug" -Filter "sparrow-app.exe" -Recurse | Select-Object -First 1
           if ($exeSource) {
@@ -353,14 +339,12 @@ jobs:
             Write-Host "::error::Sparrow.exe not found! Expected path: apps/@sparrow-desktop/src-tauri/target/debug/sparrow-app.exe"
             exit 1
           }
-
            # Copy actual StoreLogo from known path
           $logo = "apps/@sparrow-desktop/src-tauri/icons/StoreLogo.png"
           Copy-Item $logo -Destination "app-root/Assets/StoreLogo.png"
           Copy-Item $logo -Destination "app-root/Assets/Square150x150Logo.png"
           Copy-Item $logo -Destination "app-root/Assets/Square44x44Logo.png"
           Copy-Item $logo -Destination "app-root/Assets/SplashScreen.png"
-
         shell: powershell
 
       - name: Generate AppxManifest.xml with version injection
@@ -378,7 +362,6 @@ jobs:
           
           Write-Host "📁 Contents of app-root directory before manifest generation:"
           Get-ChildItem -Path $appRootPath | ForEach-Object { Write-Host "  - $($_.Name)" }
-
           # 1. Read version from Cargo.toml
           $cargoFile   = "apps/@sparrow-desktop/src-tauri/Cargo.toml"
           Write-Host "🔍 Reading version from: $cargoFile"
@@ -396,7 +379,6 @@ jobs:
           
           $version = $versionLine.Matches.Groups[1].Value
           Write-Host "✅ Found version: $version"
-
           # 2. Lookup our synced cert by thumbprint and get full Subject DN
           $thumb = "${{ secrets.SM_CODE_SIGNING_CERT_SHA1_HASH }}"
           Write-Host "🔍 Looking for certificate with thumbprint: $thumb"
@@ -413,7 +395,6 @@ jobs:
           
           $publisherDN = $cert.Subject
           Write-Host "✅ Using Publisher DN: $publisherDN"
-
           # 3. Build the AppxManifest.xml with the exact Publisher
           $manifest = @"
           <?xml version="1.0" encoding="utf-8"?>
@@ -453,7 +434,6 @@ jobs:
             </Applications>
           </Package>
           "@
-
           # 4. Write out the manifest
           $manifestPath = Join-Path $appRootPath "AppxManifest.xml"
           $manifest | Set-Content -Encoding UTF8 -Path $manifestPath
@@ -467,7 +447,6 @@ jobs:
               Write-Error "❌ Failed to create AppxManifest.xml"
               exit 1
           }
-
       - name: Create MSIX Package using MakeAppx
         run: |
           New-Item -ItemType Directory -Force -Path "msix-output"
@@ -482,7 +461,6 @@ jobs:
         run: |
           # 1. Sync certificate into Windows store
           smctl windows certsync --keypair-alias="$env:KEYPAIR_ALIAS"
-
           # 2. Sign all MSIX packages
           $certThumb = "${{ secrets.SM_CODE_SIGNING_CERT_SHA1_HASH }}"
           Get-ChildItem -Path "C:\a\sparrow-app\sparrow-app\msix-output" -Filter "*.msix" | ForEach-Object {
@@ -496,7 +474,6 @@ jobs:
             }
             Write-Host "✅ Successfully signed $($_.Name)"
           }
-
       - name: Verify MSIX Signature
         run: |
           # Verify the MSIX file exists
@@ -504,12 +481,9 @@ jobs:
               Write-Host "MSIX file not found at msix-output/sparrow.msix"
               exit 1
           }
-
           Write-Host "Verifying signature for: C:\a\sparrow-app\sparrow-app\msix-output\sparrow.msix"
-
           # Get the Authenticode signature
           $sig = Get-AuthenticodeSignature -FilePath C:\a\sparrow-app\sparrow-app\msix-output\sparrow.msix
-
           # Check the signature status
           if ($sig.Status -eq 'Valid') {
               Write-Host "Valid signature on C:\a\sparrow-app\sparrow-app\msix-output\sparrow.msix"
@@ -525,63 +499,148 @@ jobs:
         id: generate_appinstaller
         shell: pwsh
         run: |
-          # ... [your existing debug code] ...
-          
-          # Fix: Get the full path to the MSIX file
-          $msixFile = Get-ChildItem -Path $msixOutputPath -Filter "*.msix" | Select-Object -First 1
-          if (-not $msixFile) {
-              Write-Error "❌ No MSIX file found in $msixOutputPath folder!"
-              exit 1
-          }
-          
-          $msixFullPath = $msixFile.FullName
-          $msixBaseName = $msixFile.Name
-          Write-Host "✅ Found MSIX file: $msixBaseName"
-          Write-Host "📁 Full path: $msixFullPath"
-          
-          # Copy MSIX file to current directory for easier artifact upload
-          Copy-Item -Path $msixFullPath -Destination ".\$msixBaseName"
-          Write-Host "📋 Copied MSIX file to current directory"
-          
-          # URLs for hosting on S3
-          $msixUrl = "https://sparrow-assest.s3.us-east-1.amazonaws.com/desktop/$msixBaseName"
-          $appInstallerUrl = "https://sparrow-assest.s3.us-east-1.amazonaws.com/desktop/Sparrow.appinstaller"
-
-          $appInstallerContent = @"
-          <?xml version="1.0" encoding="utf-8"?>
-          <AppInstaller
-              xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
-              Version="$version"
-              Uri="$appInstallerUrl">
-
-            <MainPackage
-                Name="$identityName"
-                Publisher="$publisher"
+            # Debug: Check current working directory and list contents
+            Write-Host "🔍 Current working directory: $(Get-Location)"
+            Write-Host "📁 Contents of current directory:"
+            Get-ChildItem -Path "." | ForEach-Object { Write-Host "  - $($_.Name)" }
+            
+            # Debug: Check if app-root directory exists and list its contents
+            $appRootPath = "app-root"
+            if (Test-Path $appRootPath) {
+                Write-Host "📁 Contents of app-root directory:"
+                Get-ChildItem -Path $appRootPath | ForEach-Object { Write-Host "  - $($_.Name)" }
+            } else {
+                Write-Host "❌ app-root directory does not exist!"
+                Write-Host "🔍 Looking for app-root in absolute path..."
+                $absoluteAppRoot = "C:\a\sparrow-app\sparrow-app\app-root"
+                if (Test-Path $absoluteAppRoot) {
+                    Write-Host "✅ Found app-root at absolute path: $absoluteAppRoot"
+                    $appRootPath = $absoluteAppRoot
+                } else {
+                    Write-Host "❌ app-root not found at absolute path either!"
+                    # Search for AppxManifest.xml anywhere in the workspace
+                    Write-Host "🔍 Searching for AppxManifest.xml files in workspace..."
+                    Get-ChildItem -Path "C:\a\sparrow-app\sparrow-app" -Recurse -Filter "AppxManifest.xml" -ErrorAction SilentlyContinue | ForEach-Object {
+                        Write-Host "Found AppxManifest.xml at: $($_.FullName)"
+                    }
+                    exit 1
+                }
+            }
+            
+            $manifestPath = Join-Path $appRootPath "AppxManifest.xml"
+            Write-Host "🔍 Looking for manifest at: $manifestPath"
+            
+            if (-not (Test-Path $manifestPath)) {
+                Write-Error "❌ AppxManifest.xml not found at: $manifestPath"
+                Write-Host "🔍 Contents of $appRootPath directory:"
+                Get-ChildItem -Path $appRootPath -Force | ForEach-Object { Write-Host "  - $($_.Name)" }
+                exit 1
+            }
+            
+            Write-Host "✅ Found AppxManifest.xml at: $manifestPath"
+            
+            # Read and parse the manifest
+            [xml]$manifest = Get-Content $manifestPath
+            $identityName = $manifest.Package.Identity.Name
+            $publisher = $manifest.Package.Identity.Publisher
+            $version = $manifest.Package.Identity.Version
+            $architecture = $manifest.Package.Identity.ProcessorArchitecture
+            Write-Host "📋 Manifest Info:"
+            Write-Host "  - Name: $identityName"
+            Write-Host "  - Publisher: $publisher"
+            Write-Host "  - Version: $version"
+            Write-Host "  - Architecture: $architecture"
+            # Find the MSIX file
+            $msixOutputPath = "C:\a\sparrow-app\sparrow-app\msix-output"
+            Write-Host "🔍 Looking for MSIX files in: $msixOutputPath"
+            
+            if (Test-Path $msixOutputPath) {
+                Write-Host "📁 Contents of msix-output directory:"
+                Get-ChildItem -Path $msixOutputPath | ForEach-Object { Write-Host "  - $($_.Name)" }
+            } else {
+                Write-Host "❌ Directory does not exist: $msixOutputPath"
+                # Try relative path
+                if (Test-Path "msix-output") {
+                    Write-Host "✅ Found msix-output using relative path"
+                    $msixOutputPath = "msix-output"
+                } else {
+                    Write-Host "❌ msix-output directory not found anywhere!"
+                    exit 1
+                }
+            }
+            
+            $msixFile = Get-ChildItem -Path $msixOutputPath -Filter "*.msix" | Select-Object -First 1
+            if (-not $msixFile) {
+                Write-Error "❌ No MSIX file found in $msixOutputPath folder!"
+                exit 1
+            }
+            
+            $msixBaseName = [System.IO.Path]::GetFileName($msixFile.Name)
+            Write-Host "✅ Found MSIX file: $msixBaseName"
+            # URLs for hosting on S3
+            $msixUrl = "https://sparrow-release-assests-dev.us-east-1.amazonaws.com/desktop/$msixBaseName"
+            $appInstallerUrl = "https://sparrow-release-assests-dev.s3.us-east-1.amazonaws.com/windows/Sparrow.appinstaller"
+            $appInstallerContent = @"
+            <?xml version="1.0" encoding="utf-8"?>
+            <AppInstaller
+                xmlns="http://schemas.microsoft.com/appx/appinstaller/2018"
                 Version="$version"
-                ProcessorArchitecture="$architecture"
-                Uri="$msixUrl" />
+                Uri="$appInstallerUrl">
+              <MainPackage
+                  Name="$identityName"
+                  Publisher="$publisher"
+                  Version="$version"
+                  ProcessorArchitecture="$architecture"
+                  Uri="$msixUrl" />
+              <UpdateSettings>
+                <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="false" />
+                <AutomaticBackgroundTask />
+              </UpdateSettings>
+            </AppInstaller>
+            "@
+            
+            Set-Content -Path "Sparrow.appinstaller" -Value $appInstallerContent -Encoding UTF8
+            Write-Host "✅ Generated Sparrow.appinstaller successfully"
+            echo "MSIX_FILE_NAME=$msixBaseName" >> $env:GITHUB_ENV
 
-            <UpdateSettings>
-              <OnLaunch HoursBetweenUpdateChecks="0" ShowPrompt="true" UpdateBlocksActivation="false" />
-              <AutomaticBackgroundTask />
-            </UpdateSettings>
-          </AppInstaller>
-          "@
-          
-          Set-Content -Path "Sparrow.appinstaller" -Value $appInstallerContent -Encoding UTF8
-          
-          # Verify the generated file
-          $appInstallerSize = (Get-Item "Sparrow.appinstaller").Length
-          Write-Host "✅ Generated Sparrow.appinstaller - Size: $appInstallerSize bytes"
-          
-          echo "MSIX_FILE_NAME=$msixBaseName" >> $env:GITHUB_ENV
-          echo "MSIX_FILE_PATH=$msixFullPath" >> $env:GITHUB_ENV
+            # Sign the appinstaller file to avoid trust warnings
+            $certThumb = "${{ secrets.SM_CODE_SIGNING_CERT_SHA1_HASH }}"
+            $signtoolPath = $env:SIGNTOOL_PATH.Trim()
+            Write-Host "🔐 Signing Sparrow.appinstaller with certificate thumbprint: $certThumb"
+            & "$signtoolPath" sign `
+              /sm /s My `
+              /tr http://timestamp.digicert.com `
+              /td sha256 `
+              /fd sha256 `
+              /sha1 $certThumb `
+              "Sparrow.appinstaller"
 
-      - name: Upload App Installer and MSIX to Artifacts
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "❌ Failed to sign Sparrow.appinstaller"
+              exit 1
+            }
+            Write-Host "✅ Successfully signed Sparrow.appinstaller"
+
+            # Verify AppInstaller signature
+            $sig = Get-AuthenticodeSignature -FilePath "Sparrow.appinstaller"
+            if ($sig.Status -ne 'Valid') {
+                Write-Host "❌ Invalid signature on Sparrow.appinstaller: $($sig.Status)"
+                exit 1
+            } else {
+                Write-Host "✅ Valid signature on Sparrow.appinstaller"
+            }
+
+      - name: Upload appinstaller to S3
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          aws s3 cp Sparrow.appinstaller s3://sparrow-release-assests-dev/windows/Sparrow.appinstaller --acl public-read
+
+      - name: Upload app installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-installer-package
-          path: |
-            Sparrow.appinstaller
-            ${{ env.MSIX_FILE_NAME }}
-          retention-days: 30
+          name: Sparrow.appinstaller
+          path: Sparrow.appinstaller
