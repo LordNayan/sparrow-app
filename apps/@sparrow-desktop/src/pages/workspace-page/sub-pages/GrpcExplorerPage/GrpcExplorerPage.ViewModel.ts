@@ -100,32 +100,51 @@ class GrpcExplorerViewModel {
         return;
       }
 
-      // Get current state from the BehaviorSubject instead of fetching from DB
-      const currentState = (currentTab?.property as any)?.grpc?.state || {};
+      // Handle message separately since it's stored directly in grpc, not in state
+      const updatePayload: any = {};
 
-      await this.tabRepository.updateTab(currentTab.tabId, {
-        property: {
+      if (data.message !== undefined) {
+        // Update message directly in grpc object
+        updatePayload.property = {
+          grpc: {
+            message: data.message,
+          },
+        };
+      } else {
+        // Update other state properties
+        const currentState = (currentTab?.property as any)?.grpc?.state || {};
+        updatePayload.property = {
           grpc: {
             state: {
               ...currentState,
               ...data,
             },
           },
-        },
-      });
+        };
+      }
+
+      await this.tabRepository.updateTab(currentTab.tabId, updatePayload);
 
       // Update the local state to keep it in sync
       const updatedTab = { ...currentTab };
       if (!updatedTab.property) updatedTab.property = {};
       if (!(updatedTab.property as any).grpc)
         (updatedTab.property as any).grpc = {};
-      if (!(updatedTab.property as any).grpc.state)
-        (updatedTab.property as any).grpc.state = {};
 
-      (updatedTab.property as any).grpc.state = {
-        ...currentState,
-        ...data,
-      };
+      if (data.message !== undefined) {
+        // Update message directly
+        (updatedTab.property as any).grpc.message = data.message;
+      } else {
+        // Update state properties
+        if (!(updatedTab.property as any).grpc.state)
+          (updatedTab.property as any).grpc.state = {};
+
+        const currentState = (updatedTab.property as any).grpc.state || {};
+        (updatedTab.property as any).grpc.state = {
+          ...currentState,
+          ...data,
+        };
+      }
 
       this._tab.next(updatedTab);
     } catch (error) {
@@ -225,21 +244,11 @@ class GrpcExplorerViewModel {
 
   public onUpdateServices = async (services: any[]) => {
     try {
-      console.log("🔧 ViewModel: onUpdateServices called", {
-        servicesCount: services.length,
-        services,
-      });
-
       const currentTab = this._tab.getValue();
       if (!currentTab?.tabId) {
-        console.error("❌ ViewModel: No tab ID available for services update");
+        console.error("No tab ID available for services update");
         return;
       }
-
-      console.log("💾 ViewModel: Updating tab in database", {
-        tabId: currentTab.tabId,
-        servicesCount: services.length,
-      });
 
       await this.tabRepository.updateTab(currentTab.tabId, {
         property: {
@@ -255,17 +264,9 @@ class GrpcExplorerViewModel {
       if (!(updatedTab.property as any).grpc)
         (updatedTab.property as any).grpc = {};
       (updatedTab.property as any).grpc.services = services;
-
-      console.log("📱 ViewModel: Updating local state", {
-        updatedTabId: updatedTab.tabId,
-        grpcServices: (updatedTab.property as any).grpc.services?.length,
-      });
-
       this._tab.next(updatedTab);
-
-      console.log("✅ ViewModel: Services update complete");
     } catch (error) {
-      console.error("❌ ViewModel: Error updating services:", error);
+      console.error("Error updating services:", error);
     }
   };
 

@@ -37,34 +37,59 @@
   let isRequestInProgress = false;
   let activeRequestTab: "message" | "metadata" | "auth" = "message";
 
-  // Initialize gRPC properties safely
+  // Debug: Track method dropdown state
+  $: methodDropdownDisabled = !selectedService || methods.length === 0;
+  $: {
+    console.log("🔍 Method dropdown state:", {
+      selectedService,
+      methodsCount: methods.length,
+      disabled: methodDropdownDisabled,
+    });
+  }
+
+  // Track if component just initialized (for syncing from saved state)
+  let hasInitialized = false;
+  let currentTabId = "";
+
+  // Initialize gRPC properties safely - ONLY sync from tab on first load
   $: if ($tab?.property?.grpc) {
-    selectedService = $tab.property.grpc.selectedService || "";
-    selectedMethod = $tab.property.grpc.selectedMethod || "";
-    requestMessage = $tab.property.grpc.message || "{}";
+    // Check if this is a different tab (tab switch) or just a state update
+    const isTabSwitch = currentTabId !== "" && currentTabId !== $tab.tabId;
+    const isInitialLoad = !hasInitialized;
+    
+    // Only sync message from tab state on initial load or when switching to a different tab
+    if (isInitialLoad || isTabSwitch) {
+      requestMessage = $tab.property.grpc.message || "{}";
+      currentTabId = $tab.tabId || "";
+      
+      const tabSelectedService = $tab.property.grpc.selectedService || "";
+      const tabSelectedMethod = $tab.property.grpc.selectedMethod || "";
 
-    // Initialize services and methods from tab state
-    if (($tab.property.grpc as any).services) {
-      const tabServices = ($tab.property.grpc as any).services;
-      services = tabServices;
-      protoLoaded = services.length > 0;
-
-      // Update methods if service is selected
-      if (selectedService) {
-        const service = services.find((s) => s.full_name === selectedService);
-        methods = service?.methods || [];
+      if (tabSelectedService) selectedService = tabSelectedService;
+      if (tabSelectedMethod) selectedMethod = tabSelectedMethod;
+      
+      // Mark as initialized on first load
+      if (isInitialLoad) {
+        hasInitialized = true;
       }
     }
 
-    // Ensure metadata and auth are initialized
-    if (!$tab.property.grpc.metadata) {
-      onUpdateRequestState({ metadata: [] });
-    }
-    if (!$tab.property.grpc.auth) {
-      onUpdateRequestState({ auth: {} });
-    }
-    if (!$tab.property.grpc.state) {
-      onUpdateRequestState({ state: {} });
+    // Initialize services and methods from tab state (only when reloading from saved state)
+    if (($tab.property.grpc as any).services && ($tab.property.grpc as any).services.length > 0) {
+      // Only update if we don't have services loaded yet (prevents overwriting after manual load)
+      if (services.length === 0) {
+        const tabServices = ($tab.property.grpc as any).services;
+        services = tabServices;
+        protoLoaded = true;
+
+        // Update methods if service is selected
+        if (selectedService) {
+          const service = services.find((s) => s.full_name === selectedService);
+          if (service) {
+            methods = service.methods || [];
+          }
+        }
+      }
     }
   }
 
@@ -96,14 +121,16 @@
         });
 
         const parsed = JSON.parse(result as string);
-        services = parsed.services || [];
+        const loadedServices = parsed.services || [];
 
-        if (services.length > 0) {
+        if (loadedServices.length > 0) {
+          // Update local state immediately for UI reactivity
+          services = loadedServices;
           protoLoaded = true;
           notifications.success("Proto file loaded successfully");
 
-          // Save services to tab state
-          await onUpdateServices(services);
+          // Save services to tab state in background
+          onUpdateServices(loadedServices);
 
           // Update tab state
           onUpdateRequestState({
@@ -123,6 +150,8 @@
   }
 
   function handleServiceChange(event: CustomEvent | string) {
+    console.log("🎯 handleServiceChange called with:", event);
+
     let value: string;
     if (typeof event === "string") {
       value = event;
@@ -130,20 +159,26 @@
       value = event.detail;
     }
 
+    console.log("Selected service value:", value);
+
+    const service = services.find((s) => s.full_name === value);
+    console.log("Found service:", service);
+
+    // Update local state - force Svelte reactivity by creating new arrays
+    methods = service?.methods ? [...service.methods] : [];
     selectedService = value;
-    const service = services.find((s) => s.full_name === selectedService);
-    methods = service?.methods || [];
     selectedMethod = "";
 
-    console.log("🔧 Service selection result:", {
-      selectedService,
-      foundService: !!service,
-      methodsCount: methods.length,
-      methods,
+    console.log("Methods extracted:", {
+      count: methods.length,
+      methods: methods,
+      selectedService: selectedService,
+      selectedMethod: selectedMethod,
     });
 
+    // Save to tab state (background persistence)
     onUpdateRequestState({
-      selectedService: selectedService,
+      selectedService: value,
       selectedMethod: "",
     });
   }
@@ -155,9 +190,12 @@
     } else {
       value = event.detail;
     }
+
     selectedMethod = value;
+
+    // Save to tab state (background persistence)
     onUpdateRequestState({
-      selectedMethod: selectedMethod,
+      selectedMethod: value,
     });
   }
 
@@ -273,10 +311,13 @@
           <label class="form-label" for="service-select">Service</label>
           <Select
             id="service-select"
-            data={services.map((s) => ({ id: s.full_name, name: s.name }))}
+            data={services.map((s) => ({ id: s.full_name, name: s.full_name }))}
             titleId={selectedService}
             onclick={handleServiceChange}
             searchText="Search service..."
+            menuItem="v2"
+            variant="secondary"
+            placeholderText="Select a service"
           />
         </div>
         <div class="col-6">
@@ -287,7 +328,10 @@
             titleId={selectedMethod}
             onclick={handleMethodChange}
             searchText="Search method..."
-            disabled={!selectedService}
+            menuItem="v2"
+            variant="secondary"
+            disabled={methodDropdownDisabled}
+            placeholderText={methodDropdownDisabled ? "Select a service first" : "Select a method"}
           />
         </div>
       </div>
@@ -346,11 +390,11 @@
       {:else if activeRequestTab === "metadata"}
         <div>
           <RequestHeaders
-            headers={$tab.property.grpc.metadata || []}
+            headers={Array.isArray($tab.property.grpc.metadata) ? $tab.property.grpc.metadata : []}
             onHeadersChange={handleHeadersUpdate}
             {environmentVariables}
             onAutoGeneratedHeadersChange={() => {}}
-            autoGeneratedHeaders={[]}
+            autoGeneratedHeaders={Array.isArray($tab.property.grpc.autoGeneratedMetadata) ? $tab.property.grpc.autoGeneratedMetadata : []}
             authHeader={$requestAuthHeader}
             {onUpdateEnvironment}
             isBulkEditActive={false}

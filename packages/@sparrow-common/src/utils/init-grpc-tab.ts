@@ -40,7 +40,6 @@ class InitGrpcTab {
           selectedService: "",
           selectedMethod: "",
           message: "{}",
-          services: [],
           metadata: [
             {
               key: "",
