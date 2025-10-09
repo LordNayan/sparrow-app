@@ -96,6 +96,7 @@ use tokio::sync::Mutex as SocketMutex;
 use prost::Message as ProstMessage;
 use prost_reflect::{DescriptorPool, DynamicMessage};
 use prost_types::FileDescriptorSet;
+use tonic::transport::Endpoint;
 
 // MacOs Window Titlebar Config Imports
 #[cfg(target_os = "macos")]
@@ -650,6 +651,98 @@ struct SocketIoAppState {
 // gRPC state management
 struct GrpcAppState {
     descriptor_pool: Arc<Mutex<Option<DescriptorPool>>>,
+}
+
+// gRPC client for dynamic calls using raw HTTP/2
+struct DynamicGrpcClient {
+    client: reqwest::Client,
+    base_url: String,
+}
+
+impl DynamicGrpcClient {
+    pub fn new(base_url: String) -> Self {
+        let client = reqwest::Client::builder()
+            .http2_prior_knowledge()
+            .danger_accept_invalid_certs(true)
+            .timeout(Duration::from_secs(30))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+            
+        Self { client, base_url }
+    }
+
+    pub async fn unary_call(
+        &self,
+        service_name: &str,
+        method_name: &str,
+        request_bytes: Vec<u8>,
+        metadata: std::collections::HashMap<String, String>,
+    ) -> Result<(Vec<u8>, std::collections::HashMap<String, String>), String> {
+        let path = format!("/{}/{}", service_name, method_name);
+        let url = format!("{}{}", self.base_url, path);
+        
+        // Create gRPC message frame
+        let mut body = Vec::new();
+        body.push(0); // compression flag (0 = not compressed)
+        body.extend_from_slice(&(request_bytes.len() as u32).to_be_bytes()); // message length
+        body.extend_from_slice(&request_bytes); // message content
+
+        // Build the request
+        let mut request_builder = self.client
+            .post(&url)
+            .header("content-type", "application/grpc")
+            .header("grpc-accept-encoding", "identity,deflate,gzip")
+            .header("te", "trailers")
+            .body(body);
+
+        // Add metadata as headers
+        for (key, value) in metadata {
+            request_builder = request_builder.header(&key, &value);
+        }
+
+        // Send the request
+        let response = request_builder
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {}", e))?;
+
+        // Check status
+        if !response.status().is_success() {
+            return Err(format!("HTTP error: {}", response.status()));
+        }
+
+        // Extract response headers
+        let mut response_metadata = std::collections::HashMap::new();
+        for (key, value) in response.headers() {
+            if let Ok(value_str) = value.to_str() {
+                response_metadata.insert(key.as_str().to_string(), value_str.to_string());
+            }
+        }
+
+        // Get response body
+        let response_bytes = response
+            .bytes()
+            .await
+            .map_err(|e| format!("Failed to read response: {}", e))?;
+
+        // Parse gRPC response frame
+        if response_bytes.len() < 5 {
+            return Err("Response too short".to_string());
+        }
+
+        let _compression_flag = response_bytes[0];
+        let message_length = u32::from_be_bytes([
+            response_bytes[1], response_bytes[2], response_bytes[3], response_bytes[4]
+        ]) as usize;
+
+        if response_bytes.len() < 5 + message_length {
+            return Err("Response length mismatch".to_string());
+        }
+
+        let message_bytes = response_bytes[5..5 + message_length].to_vec();
+
+        Ok((message_bytes, response_metadata))
+    }
 }
 
 #[derive(Serialize)]
@@ -1275,6 +1368,60 @@ async fn send_graphql_request(
     };
 }
 
+/// Test gRPC server connection
+///
+/// # Arguments
+/// * `url` - gRPC server URL to test
+///
+/// # Returns
+/// JSON string containing connection status and server information
+#[tauri::command]
+async fn test_grpc_connection(
+    url: String,
+) -> Result<String, String> {
+    let start_time = std::time::Instant::now();
+    
+    // Validate URL format
+    let endpoint = match Endpoint::from_shared(url.clone()) {
+        Ok(endpoint) => endpoint.timeout(Duration::from_secs(10)),
+        Err(e) => {
+            let error_response = json!({
+                "status": "ERROR",
+                "message": format!("Invalid URL format: {}", e),
+                "url": url,
+                "duration_ms": start_time.elapsed().as_millis(),
+                "connected": false
+            });
+            return Ok(error_response.to_string());
+        }
+    };
+    
+    // Attempt to connect
+    match endpoint.connect().await {
+        Ok(_channel) => {
+            let success_response = json!({
+                "status": "SUCCESS",
+                "message": "Successfully connected to gRPC server",
+                "url": url,
+                "duration_ms": start_time.elapsed().as_millis(),
+                "connected": true,
+                "supports_tls": url.starts_with("https://"),
+            });
+            Ok(success_response.to_string())
+        },
+        Err(e) => {
+            let error_response = json!({
+                "status": "ERROR", 
+                "message": format!("Failed to connect: {}", e),
+                "url": url,
+                "duration_ms": start_time.elapsed().as_millis(),
+                "connected": false
+            });
+            Ok(error_response.to_string())
+        }
+    }
+}
+
 /// Load and parse a .proto file
 ///
 /// # Arguments
@@ -1384,12 +1531,81 @@ async fn load_grpc_proto(
 ///
 /// # Returns
 /// JSON string containing response status, metadata, and message
+
+/// Helper function to convert prost_reflect Value to serde_json Value recursively
+fn convert_value_to_json(value: &prost_reflect::Value, field: &prost_reflect::FieldDescriptor) -> Option<serde_json::Value> {
+    match field.kind() {
+        prost_reflect::Kind::String => {
+            value.as_str().map(|s| serde_json::Value::String(s.to_string()))
+        },
+        prost_reflect::Kind::Int32
+        | prost_reflect::Kind::Sint32
+        | prost_reflect::Kind::Sfixed32 => {
+            value.as_i32().map(|i| serde_json::Value::Number(serde_json::Number::from(i)))
+        },
+        prost_reflect::Kind::Int64
+        | prost_reflect::Kind::Sint64
+        | prost_reflect::Kind::Sfixed64 => {
+            value.as_i64().map(|i| serde_json::Value::Number(serde_json::Number::from(i)))
+        },
+        prost_reflect::Kind::Uint32
+        | prost_reflect::Kind::Fixed32 => {
+            value.as_u32().map(|i| serde_json::Value::Number(serde_json::Number::from(i)))
+        },
+        prost_reflect::Kind::Uint64
+        | prost_reflect::Kind::Fixed64 => {
+            value.as_u64().map(|i| serde_json::Value::Number(serde_json::Number::from(i)))
+        },
+        prost_reflect::Kind::Float => {
+            value.as_f32()
+                .and_then(|f| serde_json::Number::from_f64(f as f64))
+                .map(serde_json::Value::Number)
+        },
+        prost_reflect::Kind::Double => {
+            value.as_f64()
+                .and_then(serde_json::Number::from_f64)
+                .map(serde_json::Value::Number)
+        },
+        prost_reflect::Kind::Bool => {
+            value.as_bool().map(serde_json::Value::Bool)
+        },
+        prost_reflect::Kind::Bytes => {
+            value.as_bytes().map(|b| serde_json::Value::String(base64::encode(b)))
+        },
+        prost_reflect::Kind::Message(msg_desc) => {
+            if let Some(dynamic_msg) = value.as_message() {
+                let mut json_obj = serde_json::Map::new();
+                for nested_field in msg_desc.fields() {
+                    let nested_value = dynamic_msg.get_field(&nested_field);
+                    if let Some(nested_json) = convert_value_to_json(nested_value.as_ref(), &nested_field) {
+                        json_obj.insert(nested_field.name().to_string(), nested_json);
+                    }
+                }
+                Some(serde_json::Value::Object(json_obj))
+            } else {
+                None
+            }
+        },
+        prost_reflect::Kind::Enum(enum_desc) => {
+            if let Some(enum_number) = value.as_enum_number() {
+                if let Some(enum_value) = enum_desc.get_value(enum_number) {
+                    Some(serde_json::Value::String(enum_value.name().to_string()))
+                } else {
+                    Some(serde_json::Value::Number(serde_json::Number::from(enum_number)))
+                }
+            } else {
+                None
+            }
+        },
+    }
+}
+
 #[tauri::command]
 async fn send_grpc_request(
     url: String,
     service_name: String,
     method_name: String,
-    _metadata: String,
+    metadata: String,
     message: String,
     state: tauri::State<'_, Arc<GrpcAppState>>,
 ) -> Result<String, String> {
@@ -1407,28 +1623,158 @@ async fn send_grpc_request(
         .ok_or(format!("Service '{}' not found", service_name))?;
 
     // Validate method exists
-    let _method = service
+    let method = service
         .methods()
         .find(|m| m.name() == method_name)
         .ok_or(format!("Method '{}' not found", method_name))?;
 
-    // Parse message to validate it's valid JSON
-    let _message_value: serde_json::Value = serde_json::from_str(&message)
+    // Parse message JSON
+    let message_value: serde_json::Value = serde_json::from_str(&message)
         .map_err(|e| format!("Failed to parse message JSON: {}", e))?;
 
-    // Return placeholder response for MVP
-    // TODO: Implement actual gRPC call using tonic with proper code generation
-    let response_json = json!({
+    // Parse metadata
+    let metadata_map: std::collections::HashMap<String, String> = serde_json::from_str(&metadata)
+        .unwrap_or_default();
+
+    // Validate URL and prepare base URL for gRPC client
+    let base_url = if url.ends_with('/') {
+        url.trim_end_matches('/').to_string()
+    } else {
+        url.clone()
+    };
+
+    // Test connection first
+    let test_endpoint = Endpoint::from_shared(base_url.clone())
+        .map_err(|e| format!("Invalid URL '{}': {}", base_url, e))?
+        .timeout(Duration::from_secs(10));
+
+    if let Err(e) = test_endpoint.connect().await {
+        let error_response = json!({
+            "status": "ERROR",
+            "status_code": 14, // UNAVAILABLE
+            "message": format!("Failed to connect to gRPC server: {}", e),
+            "url": url,
+            "metadata": {},
+            "duration_ms": start_time.elapsed().as_millis(),
+            "error_details": format!("Connection error: {}", e)
+        });
+        return Ok(error_response.to_string());
+    }
+
+    // Test connection first
+    let test_endpoint = Endpoint::from_shared(base_url.clone())
+        .map_err(|e| format!("Invalid URL '{}': {}", base_url, e))?
+        .timeout(Duration::from_secs(10));
+
+    if let Err(e) = test_endpoint.connect().await {
+        let error_response = json!({
+            "status": "ERROR",
+            "status_code": 14, // UNAVAILABLE
+            "message": format!("Failed to connect to gRPC server: {}", e),
+            "url": url,
+            "metadata": {},
+            "duration_ms": start_time.elapsed().as_millis(),
+            "error_details": format!("Connection error: {}", e)
+        });
+        return Ok(error_response.to_string());
+    }
+
+    // Create dynamic message from JSON
+    let input_message_descriptor = method.input();
+    let dynamic_request = match DynamicMessage::deserialize(input_message_descriptor.clone(), &message_value) {
+        Ok(msg) => msg,
+        Err(e) => {
+            let error_response = json!({
+                "status": "ERROR",
+                "status_code": 3, // INVALID_ARGUMENT
+                "message": format!("Failed to convert JSON to protobuf: {}", e),
+                "url": url,
+                "metadata": {},
+                "duration_ms": start_time.elapsed().as_millis(),
+                "error_details": format!("JSON conversion error: {}", e)
+            });
+            return Ok(error_response.to_string());
+        }
+    };
+
+    // Serialize request to bytes
+    let request_bytes = dynamic_request.encode_to_vec();
+
+    // Create dynamic gRPC client with the base URL
+    let grpc_client = DynamicGrpcClient::new(base_url);
+
+    // Make the actual gRPC call
+    let (response_bytes, response_metadata) = match grpc_client
+        .unary_call(&service_name, &method_name, request_bytes, metadata_map)
+        .await
+    {
+        Ok((bytes, metadata)) => (bytes, metadata),
+        Err(error_msg) => {
+            let error_response = json!({
+                "status": "ERROR",
+                "status_code": 2, // UNKNOWN
+                "message": format!("gRPC call failed: {}", error_msg),
+                "url": url,
+                "metadata": {},
+                "duration_ms": start_time.elapsed().as_millis(),
+                "error_details": error_msg
+            });
+            return Ok(error_response.to_string());
+        }
+    };
+
+    // Deserialize the response bytes back to a dynamic message
+    let output_message_descriptor = method.output();
+    
+    let dynamic_response = match DynamicMessage::decode(output_message_descriptor.clone(), &response_bytes[..]) {
+        Ok(msg) => msg,
+        Err(e) => {
+            let error_response = json!({
+                "status": "ERROR",
+                "status_code": 13, // INTERNAL
+                "message": format!("Failed to decode response: {}", e),
+                "url": url,
+                "metadata": response_metadata,
+                "duration_ms": start_time.elapsed().as_millis(),
+                "error_details": format!("Response decode error: {}", e)
+            });
+            return Ok(error_response.to_string());
+        }
+    };
+
+    // Convert the dynamic message back to JSON using prost_reflect's built-in JSON support
+    let response_json = {
+        // Try to serialize using the message descriptor's JSON functionality
+        let mut json_value = serde_json::Map::new();
+        
+        // Get all fields from the message
+        for field in output_message_descriptor.fields() {
+            let value = dynamic_response.get_field(&field);
+            let field_name = field.name();
+            
+            // Convert the field value to JSON
+            let json_field_value = convert_value_to_json(value.as_ref(), &field);
+            if let Some(val) = json_field_value {
+                json_value.insert(field_name.to_string(), val);
+            }
+        }
+        
+        serde_json::Value::Object(json_value)
+    };
+
+    // Build successful response
+    let final_response = json!({
         "status": "OK",
         "status_code": 0,
-        "message": format!("gRPC proto validation successful. Service: {}, Method: {}", service_name, method_name),
+        "message": response_json,
         "url": url,
-        "metadata": {},
+        "metadata": response_metadata,
         "duration_ms": start_time.elapsed().as_millis(),
-        "note": "Proto file loaded and validated. Full gRPC execution requires additional implementation with tonic codegen."
+        "service": service_name,
+        "method": method_name
     });
 
-    Ok(response_json.to_string())
+    Ok(final_response.to_string())
 }
 
 // Driver Function
@@ -1534,6 +1880,7 @@ fn main() {
             disconnect_socket_io,
             send_socket_io_message,
             send_graphql_request,
+            test_grpc_connection,
             load_grpc_proto,
             send_grpc_request,
             show_toolbar,

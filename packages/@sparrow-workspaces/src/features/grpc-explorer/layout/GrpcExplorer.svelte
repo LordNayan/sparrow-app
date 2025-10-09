@@ -36,6 +36,9 @@
   let responseData = "";
   let isRequestInProgress = false;
   let activeRequestTab: "message" | "metadata" | "auth" = "message";
+  let isTestingConnection = false;
+  let isValidJson = true;
+  let jsonError = "";
 
   // Debug: Track method dropdown state
   $: methodDropdownDisabled = !selectedService || methods.length === 0;
@@ -100,6 +103,36 @@
   // Wrapper function for headers update
   function handleHeadersUpdate(headers: any[]) {
     onUpdateHeaders(headers);
+  }
+
+  async function handleTestConnection() {
+    if (!$tab?.property?.grpc?.url) {
+      notifications.error("Please enter a gRPC server URL first");
+      return;
+    }
+
+    try {
+      isTestingConnection = true;
+      
+      const result = await invoke("test_grpc_connection", {
+        url: $tab.property.grpc.url,
+      });
+
+      const response = JSON.parse(result as string);
+      
+      if (response.status === "SUCCESS") {
+        notifications.success(
+          `✓ Connected to gRPC server (${response.duration_ms}ms)`
+        );
+      } else {
+        notifications.error(`Connection failed: ${response.message}`);
+      }
+    } catch (error) {
+      notifications.error(`Connection test failed: ${error}`);
+      console.error(error);
+    } finally {
+      isTestingConnection = false;
+    }
   }
 
   async function handleLoadProto() {
@@ -241,10 +274,26 @@
         message: requestMessage,
       });
 
-      responseData = JSON.stringify(JSON.parse(result as string), null, 2);
-      notifications.success("gRPC request sent successfully");
+      responseData = result as string;
+      
+      // Parse response to show appropriate notification
+      try {
+        const parsedResponse = JSON.parse(result as string);
+        if (parsedResponse.status === "OK") {
+          notifications.success(`✓ gRPC request completed (${parsedResponse.duration_ms}ms)`);
+        } else {
+          notifications.error(`gRPC request failed: ${parsedResponse.message}`);
+        }
+      } catch {
+        notifications.success("gRPC request sent successfully");
+      }
     } catch (error) {
-      responseData = `Error: ${error}`;
+      responseData = JSON.stringify({
+        status: "ERROR",
+        status_code: -1,
+        message: `Request failed: ${error}`,
+        duration_ms: 0
+      });
       notifications.error(`Request failed: ${error}`);
       console.error(error);
     } finally {
@@ -255,6 +304,22 @@
   function handleMessageChange(event: Event) {
     const target = event.target as HTMLTextAreaElement;
     requestMessage = target.value;
+    
+    // Validate JSON
+    try {
+      if (requestMessage.trim()) {
+        JSON.parse(requestMessage);
+        isValidJson = true;
+        jsonError = "";
+      } else {
+        isValidJson = true;
+        jsonError = "";
+      }
+    } catch (error) {
+      isValidJson = false;
+      jsonError = error instanceof Error ? error.message : "Invalid JSON";
+    }
+    
     onUpdateRequestState({
       message: requestMessage,
     });
@@ -268,7 +333,7 @@
       <input
         type="text"
         class="form-control url-input"
-        placeholder="grpc://localhost:50051"
+        placeholder="grpc://localhost:50051 or http://localhost:50051"
         value={$tab?.property?.grpc?.url || ""}
         on:input={(e) => {
           // @ts-ignore
@@ -279,14 +344,39 @@
         }}
       />
       <Button
+        title="Test Connection"
+        type="secondary"
+        loader={isTestingConnection}
+        disable={isTestingConnection || !$tab?.property?.grpc?.url}
+        onClick={handleTestConnection}
+        startIcon=""
+        endIcon=""
+      />
+      <Button
         title={isRequestInProgress ? "Sending..." : "Send"}
         type="primary"
         loader={isRequestInProgress}
-        disable={isRequestInProgress}
+        disable={isRequestInProgress || !protoLoaded || !selectedService || !selectedMethod || !isValidJson}
         onClick={handleSendRequest}
         startIcon=""
         endIcon=""
       />
+    </div>
+
+    <!-- Helper Text -->
+    <div class="mb-3">
+      <small class="text-muted">
+        Enter your gRPC server URL, load a .proto file, select service and method, then send your request.
+        {#if !protoLoaded}
+          <strong>Next: Load a proto file</strong>
+        {:else if !selectedService}
+          <strong>Next: Select a service</strong>
+        {:else if !selectedMethod}
+          <strong>Next: Select a method</strong>
+        {:else}
+          <strong>Ready to send!</strong>
+        {/if}
+      </small>
     </div>
 
     <!-- Proto File Loader -->
@@ -381,11 +471,21 @@
           <textarea
             id="message-editor"
             class="form-control message-editor"
+            class:invalid-json={!isValidJson}
             rows="15"
             placeholder={'{\n  "field": "value"\n}'}
             value={requestMessage}
             on:input={handleMessageChange}
           ></textarea>
+          {#if !isValidJson && jsonError}
+            <div class="json-error mt-1">
+              <small class="text-danger">❌ {jsonError}</small>
+            </div>
+          {:else if isValidJson && requestMessage.trim()}
+            <div class="json-valid mt-1">
+              <small class="text-success">✓ Valid JSON</small>
+            </div>
+          {/if}
         </div>
       {:else if activeRequestTab === "metadata"}
         <div>
@@ -421,10 +521,38 @@
       {#if isRequestInProgress}
         <div class="text-center mt-5">
           <Loader loaderSize="24px" />
-          <p class="mt-2">Sending request...</p>
+          <p class="mt-2">Sending gRPC request...</p>
         </div>
       {:else if responseData}
-        <pre class="response-viewer">{responseData}</pre>
+        <div class="response-container">
+          <!-- Response Info Bar -->
+          {#if typeof responseData === 'string'}
+            {@const parsedResponse = JSON.parse(responseData)}
+            <div class="response-info mb-2 p-2 rounded" 
+                 class:success={parsedResponse.status === 'OK'}
+                 class:error={parsedResponse.status === 'ERROR'}>
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="status-text">
+                  {parsedResponse.status === 'OK' ? '✓' : '✗'} 
+                  {parsedResponse.status}
+                  {#if parsedResponse.status_code !== undefined}
+                    (Code: {parsedResponse.status_code})
+                  {/if}
+                </span>
+                {#if parsedResponse.duration_ms}
+                  <span class="duration-text">{parsedResponse.duration_ms}ms</span>
+                {/if}
+              </div>
+            </div>
+            
+            <!-- Response Body -->
+            <pre class="response-viewer">{typeof parsedResponse.message === 'string' ? 
+              parsedResponse.message : 
+              JSON.stringify(parsedResponse.message, null, 2)}</pre>
+          {:else}
+            <pre class="response-viewer">{responseData}</pre>
+          {/if}
+        </div>
       {:else}
         <div class="text-center text-muted mt-5">
           <p>Response will appear here</p>
@@ -524,4 +652,95 @@
   .border-end {
     border-right: 1px solid var(--border-ds-neutral-700) !important;
   }
+
+  .response-info {
+    font-size: 12px;
+    border: 1px solid var(--border-ds-neutral-600);
+  }
+
+  .response-info.success {
+    background-color: var(--bg-ds-success-900);
+    border-color: var(--border-ds-success-600);
+    color: var(--text-ds-success-100);
+  }
+
+  .response-info.error {
+    background-color: var(--bg-ds-danger-900);
+    border-color: var(--border-ds-danger-600);
+    color: var(--text-ds-danger-100);
+  }
+
+  .status-text {
+    font-weight: 600;
+  }
+
+  .duration-text {
+    font-family: "Monaco", "Menlo", monospace;
+    opacity: 0.8;
+  }
+
+  .response-container {
+    height: calc(100% - 40px);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .response-viewer {
+    flex: 1;
+    overflow-y: auto;
+  }  .response-info {
+    background-color: var(--bg-ds-surface-700);
+    border: 1px solid var(--border-ds-neutral-600);
+    font-size: 12px;
+  }
+
+  .response-info.success {
+    background-color: var(--bg-ds-success-800);
+    border-color: var(--border-ds-success-600);
+    color: var(--text-ds-success-100);
+  }
+
+  .response-info.error {
+    background-color: var(--bg-ds-danger-800);
+    border-color: var(--border-ds-danger-600);
+    color: var(--text-ds-danger-100);
+  }
+
+  .status-text {
+    font-weight: 500;
+  }
+
+  .duration-text {
+    font-family: "Monaco", "Menlo", monospace;
+    opacity: 0.8;
+  }
+
+  .response-container {
+    height: calc(100% - 40px);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .response-viewer {
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .invalid-json {
+    border-color: var(--border-ds-danger-500) !important;
+    box-shadow: 0 0 0 1px var(--border-ds-danger-500);
+  }
+
+  .json-error {
+    font-size: 11px;
+  }
+
+  .json-valid {
+    font-size: 11px;
+  }
+
+  .text-danger {
+    color: var(--text-ds-danger-300);
+  }
 </style>
+
