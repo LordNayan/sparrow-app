@@ -92,6 +92,11 @@ use rust_socketio::{
 use tauri_plugin_os::platform;
 use tokio::sync::Mutex as SocketMutex;
 
+// gRPC imports
+use prost::Message as ProstMessage;
+use prost_reflect::{DescriptorPool, DynamicMessage};
+use prost_types::FileDescriptorSet;
+
 // MacOs Window Titlebar Config Imports
 #[cfg(target_os = "macos")]
 #[macro_use]
@@ -640,6 +645,11 @@ struct AppState {
 }
 struct SocketIoAppState {
     connections: SocketMutex<HashMap<String, SocketClient>>,
+}
+
+// gRPC state management
+struct GrpcAppState {
+    descriptor_pool: Arc<Mutex<Option<DescriptorPool>>>,
 }
 
 #[derive(Serialize)]
@@ -1265,6 +1275,162 @@ async fn send_graphql_request(
     };
 }
 
+/// Load and parse a .proto file
+///
+/// # Arguments
+/// * `proto_path` - Path to the .proto file
+/// * `state` - Application state containing the descriptor pool
+///
+/// # Returns
+/// JSON string containing services and methods information
+#[tauri::command]
+async fn load_grpc_proto(
+    proto_path: String,
+    state: tauri::State<'_, Arc<GrpcAppState>>,
+) -> Result<String, String> {
+    // Validate proto file exists
+    let _proto_content = std::fs::read_to_string(&proto_path)
+        .map_err(|e| format!("Failed to read proto file: {}", e))?;
+
+    // Extract directory and filename from the proto path
+    let proto_path_buf = std::path::Path::new(&proto_path);
+    let proto_dir = proto_path_buf
+        .parent()
+        .ok_or("Invalid proto file path")?
+        .to_str()
+        .ok_or("Invalid proto directory path")?;
+    let proto_filename = proto_path_buf
+        .file_name()
+        .ok_or("Invalid proto filename")?
+        .to_str()
+        .ok_or("Invalid proto filename encoding")?;
+
+    // Use protoc to compile the proto file
+    let temp_dir = std::env::temp_dir();
+    let descriptor_path = temp_dir.join("descriptor.bin");
+
+    let output = std::process::Command::new("protoc")
+        .arg("--descriptor_set_out")
+        .arg(&descriptor_path)
+        .arg("--include_imports")
+        .arg("--proto_path")
+        .arg(proto_dir)
+        .arg(proto_filename)
+        .output()
+        .map_err(|e| format!("Failed to run protoc: {}. Make sure protoc is installed.", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "protoc failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    // Read the descriptor set
+    let descriptor_bytes = std::fs::read(&descriptor_path)
+        .map_err(|e| format!("Failed to read descriptor: {}", e))?;
+
+    let fds = FileDescriptorSet::decode(&descriptor_bytes[..])
+        .map_err(|e| format!("Failed to decode descriptor: {}", e))?;
+
+    // Create descriptor pool
+    let pool = DescriptorPool::from_file_descriptor_set(fds)
+        .map_err(|e| format!("Failed to create descriptor pool: {}", e))?;
+
+    // Extract services and methods
+    let mut services_info = Vec::new();
+
+    for service in pool.services() {
+        let mut methods_info = Vec::new();
+
+        for method in service.methods() {
+            methods_info.push(json!({
+                "name": method.name(),
+                "full_name": method.full_name(),
+                "input_type": method.input().full_name(),
+                "output_type": method.output().full_name(),
+                "client_streaming": method.is_client_streaming(),
+                "server_streaming": method.is_server_streaming(),
+            }));
+        }
+
+        services_info.push(json!({
+            "name": service.name(),
+            "full_name": service.full_name(),
+            "methods": methods_info,
+        }));
+    }
+
+    // Store descriptor pool in state
+    let mut pool_guard = state.descriptor_pool.lock().await;
+    *pool_guard = Some(pool);
+
+    Ok(json!({
+        "services": services_info,
+        "proto_path": proto_path,
+    })
+    .to_string())
+}
+
+/// Send a unary gRPC request
+///
+/// # Arguments
+/// * `url` - gRPC server URL (e.g., "http://localhost:50051")
+/// * `service_name` - Full service name (e.g., "mypackage.MyService")
+/// * `method_name` - Method name (e.g., "GetUser")
+/// * `metadata` - JSON string of metadata key-value pairs
+/// * `message` - JSON string of the request message
+/// * `state` - Application state containing the descriptor pool
+///
+/// # Returns
+/// JSON string containing response status, metadata, and message
+#[tauri::command]
+async fn send_grpc_request(
+    url: String,
+    service_name: String,
+    method_name: String,
+    _metadata: String,
+    message: String,
+    state: tauri::State<'_, Arc<GrpcAppState>>,
+) -> Result<String, String> {
+    let start_time = std::time::Instant::now();
+
+    // Get descriptor pool to validate service and method exist
+    let pool_guard = state.descriptor_pool.lock().await;
+    let pool = pool_guard
+        .as_ref()
+        .ok_or("No proto file loaded. Please load a proto file first.")?;
+
+    // Validate service exists
+    let service = pool
+        .get_service_by_name(&service_name)
+        .ok_or(format!("Service '{}' not found", service_name))?;
+
+    // Validate method exists
+    let _method = service
+        .methods()
+        .find(|m| m.name() == method_name)
+        .ok_or(format!("Method '{}' not found", method_name))?;
+
+    // Parse message to validate it's valid JSON
+    let _message_value: serde_json::Value = serde_json::from_str(&message)
+        .map_err(|e| format!("Failed to parse message JSON: {}", e))?;
+
+    // Return placeholder response for MVP
+    // TODO: Implement actual gRPC call using tonic with proper code generation
+    let response_json = json!({
+        "status": "OK",
+        "status_code": 0,
+        "message": format!("gRPC proto validation successful. Service: {}, Method: {}", service_name, method_name),
+        "url": url,
+        "metadata": {},
+        "duration_ms": start_time.elapsed().as_millis(),
+        "note": "Proto file loaded and validated. Full gRPC execution requires additional implementation with tonic codegen."
+    });
+
+    Ok(response_json.to_string())
+}
+
 // Driver Function
 fn main() {
     // Initiate Tauri Runtime
@@ -1327,6 +1493,9 @@ fn main() {
             app.manage(Arc::new(SocketIoAppState {
                 connections: Mutex::new(std::collections::HashMap::new()),
             }));
+            app.manage(Arc::new(GrpcAppState {
+                descriptor_pool: Arc::new(Mutex::new(None)),
+            }));
 
             // Hide Titlebar for MacOS and close the additional window
             let platform_name = platform();
@@ -1365,6 +1534,8 @@ fn main() {
             disconnect_socket_io,
             send_socket_io_message,
             send_graphql_request,
+            load_grpc_proto,
+            send_grpc_request,
             show_toolbar,
             hide_toolbar
         ])

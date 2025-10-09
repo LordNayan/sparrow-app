@@ -6,6 +6,7 @@ import type { WebSocketWrapper } from "./websocket-request-tab";
 import type { TFTabItemWrapperType } from "./testflow-tab";
 import type { SocketIoWrapper } from "./socket-io-request-tab";
 import type { GraphqlRequestWrapperTabInterface } from "./graphql-request-tab";
+import type { GrpcRequestWrapperTabInterface } from "./grpc-request-tab";
 import type { HttpRequestSavedWrapperTabInterface } from "./http-request-saved-tab";
 import type { HttpRequestMockWrapperTabInterface } from "./http-request-mock-tab";
 import type { AiRequestWrapper } from "./ai-request-tab";
@@ -25,6 +26,7 @@ export enum TabTypeEnum {
   TESTFLOW = "TESTFLOW",
   SOCKET_IO = "SOCKETIO",
   GRAPHQL = "GRAPHQL",
+  GRPC = "GRPC",
   SAVED_REQUEST = "SAVED_REQUEST",
   AI_REQUEST = "AI_REQUEST",
   MOCK_REQUEST = "MOCK_REQUEST",
@@ -124,6 +126,7 @@ export interface Property
     Partial<TFTabItemWrapperType>,
     Partial<SocketIoWrapper>,
     Partial<GraphqlRequestWrapperTabInterface>,
+    Partial<GrpcRequestWrapperTabInterface>,
     Partial<HttpRequestMockWrapperTabInterface>,
     Partial<HttpRequestSavedWrapperTabInterface>,
     Partial<TestflowScheduleWrapperTabInterface>,

@@ -109,6 +109,7 @@ import {
   CollectionTabAdapter,
   FolderTabAdapter,
   GraphqlTabAdapter,
+  GrpcTabAdapter,
   RequestMockTabAdapter,
   RequestSavedTabAdapter,
   SocketIoTabAdapter,
@@ -502,6 +503,21 @@ export default class CollectionsViewModel {
   };
 
   /**
+   * Create grpc new tab with untracked id
+   */
+  private createGrpcNewTab = async () => {
+    const ws = await this.workspaceRepository.getActiveWorkspaceDoc();
+    if (ws) {
+      this.tabRepository.createTab(
+        this.initTab.grpc("UNTRACKED-" + uuidv4(), ws._id).getValue(),
+      );
+      scrollToTab("");
+    } else {
+      console.error("No active workspace found!");
+    }
+  };
+
+  /**
    * Create ai request new tab with untracked id
    */
   private createAiRequestNewTab = async () => {
@@ -543,9 +559,7 @@ export default class CollectionsViewModel {
       newRequestTab.updateHeaders(
         restOfData.property.request.headers as KeyValueChecked[],
       );
-      newRequestTab.updateTests(
-        restOfData.property.request.tests,
-      );
+      newRequestTab.updateTests(restOfData.property.request.tests);
       newRequestTab.updateQueryParams(
         restOfData.property.request.queryParams as KeyValueChecked[],
       );
@@ -2303,6 +2317,47 @@ export default class CollectionsViewModel {
   };
 
   /**
+   * Handle creating a new grpc in a collection
+   * @param _workspaceId - workspace id
+   * @param _collection - the collection in which new grpc is going to be created
+   */
+  private handleCreateGrpcInCollection = async (
+    _workspaceId: string,
+    _collection: CollectionDto,
+  ) => {
+    const grpcTab = new InitTab().grpc(uuidv4(), _workspaceId);
+    let isGuestUser;
+    isGuestUserActive.subscribe((value) => {
+      isGuestUser = value;
+    });
+
+    // For guest users or bare minimum, just create the tab locally
+    await this.collectionRepository.addRequestOrFolderInCollection(
+      _collection.id as string,
+      {
+        id: grpcTab.getValue().id,
+        name: grpcTab.getValue().name,
+        type: CollectionItemTypeBaseEnum.GRPC,
+        description: "",
+        grpc: {},
+        ...(isGuestUser ? { updatedAt: new Date().toISOString() } : {}),
+      },
+    );
+    grpcTab.updatePath({
+      workspaceId: _workspaceId,
+      collectionId: _collection.id,
+      folderId: "",
+    });
+    grpcTab.updateIsSave(true);
+    await this.tabRepository.createTab(grpcTab.getValue());
+    scrollToTab("");
+    MixpanelEvent(Events.CREATE_REQUEST, {
+      source: "Collection list",
+    });
+    return;
+  };
+
+  /**
    * Handles creating a new request in a folder
    * @param workspaceId :string
    * @param collection :CollectionDocument - the collection in which new request is going to be created
@@ -3420,6 +3475,31 @@ export default class CollectionsViewModel {
     adaptedRequest.persistence = TabPersistenceTypeEnum.TEMPORARY;
     this.tabRepository.createTab(adaptedRequest);
     scrollToTab(_graphql.id);
+  };
+
+  /**
+   * Handles opening a gRPC request on a tab
+   * @param workspaceId : - The workspace ID
+   * @param collection : - The collection containing the request
+   * @param folder : - The folder containing the request
+   * @param _grpc : - The gRPC request to open
+   */
+  public handleOpenGrpcTab = (
+    workspaceId: string,
+    collection: CollectionDto,
+    folder: CollectionItemsDto,
+    _grpc: CollectionItemsDto,
+  ) => {
+    const grpcTabAdapter = new GrpcTabAdapter();
+    const adaptedRequest = grpcTabAdapter.adapt(
+      workspaceId || "",
+      collection?.id || "",
+      folder?.id || "",
+      _grpc,
+    );
+    adaptedRequest.persistence = TabPersistenceTypeEnum.TEMPORARY;
+    this.tabRepository.createTab(adaptedRequest);
+    scrollToTab(_grpc.id);
   };
 
   /**
@@ -5321,6 +5401,114 @@ export default class CollectionsViewModel {
   };
 
   /**
+   * Handle deleting gRPC request from repository
+   * @param _workspaceId
+   * @param _collection The collection in which the gRPC request is saved
+   * @param _grpc  The gRPC request to be deleted
+   * @param _folder The folder in which the gRPC request is saved (if is saved in a folder)
+   * @returns
+   */
+  private handleDeleteGrpc = async (
+    _workspaceId: string,
+    _collection: CollectionDto,
+    _grpc: CollectionItemsDto,
+    _folder: CollectionItemsDto,
+  ): Promise<boolean> => {
+    // For now, just handle local deletion (bare minimum implementation)
+    if (_folder) {
+      await this.collectionRepository.deleteRequestInFolder(
+        _collection.id,
+        _folder.id,
+        _grpc.id,
+      );
+      this.handleRemoveTab(_grpc.id);
+    } else {
+      await this.collectionRepository.deleteRequestOrFolderInCollection(
+        _collection.id,
+        _grpc.id,
+      );
+      this.handleRemoveTab(_grpc.id);
+    }
+
+    notifications.success(`"${_grpc.name}" gRPC request deleted.`);
+    MixpanelEvent(Events.DELETE_REQUEST, {
+      source: "Collection list",
+    });
+    return true;
+  };
+
+  /**
+   * Handles renaming a gRPC request
+   * @param _workspaceId
+   * @param _collection The collection in which the gRPC request is saved
+   * @param _folder The folder in which the gRPC request is saved (if request if saved inside a folder)
+   * @param _grpc The gRPC request which is going to be renamed
+   * @param _newGrpcName The new name of the gRPC request
+   */
+  private handleRenameGrpc = async (
+    _workspaceId: string,
+    _collection: CollectionDto,
+    _folder: CollectionItemsDto,
+    _grpc: CollectionItemsDto,
+    _newGrpcName: string,
+  ) => {
+    // For now, just handle local renaming (bare minimum implementation)
+    if (_collection.id && _workspaceId && !_folder.id) {
+      const response =
+        await this.collectionRepository.readRequestOrFolderInCollection(
+          _collection.id,
+          _grpc.id,
+        );
+      if (response) {
+        response.name = _newGrpcName;
+      }
+      const newResponse = {
+        ...response,
+        updatedAt: new Date().toISOString(),
+      };
+      await this.collectionRepository.updateRequestOrFolderInCollection(
+        _collection.id,
+        _grpc.id,
+        newResponse,
+      );
+      this.updateTab(_grpc.id, {
+        name: _newGrpcName,
+      });
+      MixpanelEvent(Events.RENAME_REQUEST, {
+        source: "Collection list",
+      });
+      return;
+    }
+    if (_collection.id && _workspaceId && _folder.id) {
+      const response = await this.collectionRepository.readRequestInFolder(
+        _collection.id,
+        _folder.id,
+        _grpc.id,
+      );
+      if (response) {
+        response.name = _newGrpcName;
+      }
+      const newResponse = {
+        ...response,
+        updatedAt: new Date().toISOString(),
+      };
+      await this.collectionRepository.updateRequestInFolder(
+        _collection.id,
+        _folder.id,
+        _grpc.id,
+        newResponse,
+      );
+      this.updateTab(_grpc.id, {
+        name: _newGrpcName,
+      });
+      MixpanelEvent(Events.RENAME_REQUEST, {
+        source: "Collection list",
+      });
+      return;
+    }
+  };
+
+  /**
    * Handle refetching collection from local repository in active sync enabled collections
    * @param workspaceId :string - the workspace ID
    * @param collection :CollectionDocument - The collection going to be refetched
@@ -5887,6 +6075,15 @@ export default class CollectionsViewModel {
           args.folder as CollectionItemsDto,
         );
         break;
+      case "grpc":
+        await this.createGrpcNewTab();
+        break;
+      case "grpcCollection":
+        await this.handleCreateGrpcInCollection(
+          args.workspaceId,
+          args.collection as CollectionDto,
+        );
+        break;
       case "aiRequest":
         await this.createAiRequestNewTab();
         break;
@@ -5969,6 +6166,14 @@ export default class CollectionsViewModel {
           args.workspaceId,
           args.collection as CollectionDto,
           args.graphql as CollectionItemsDto,
+          args.folder as CollectionItemsDto,
+        );
+        break;
+      case "grpc":
+        this.handleDeleteGrpc(
+          args.workspaceId,
+          args.collection as CollectionDto,
+          args.grpc as CollectionItemsDto,
           args.folder as CollectionItemsDto,
         );
         break;
@@ -6060,6 +6265,15 @@ export default class CollectionsViewModel {
           args.collection as CollectionDto,
           args.folder as CollectionItemsDto,
           args.graphql as CollectionItemsDto,
+          args.newName as string,
+        );
+        break;
+      case "grpc":
+        this.handleRenameGrpc(
+          args.workspaceId,
+          args.collection as CollectionDto,
+          args.folder as CollectionItemsDto,
+          args.grpc as CollectionItemsDto,
           args.newName as string,
         );
         break;
@@ -6160,6 +6374,14 @@ export default class CollectionsViewModel {
           args.collection as CollectionDto,
           args.folder as CollectionItemsDto,
           args.graphql as CollectionItemsDto,
+        );
+        break;
+      case "grpc":
+        this.handleOpenGrpcTab(
+          args.workspaceId,
+          args.collection as CollectionDto,
+          args.folder as CollectionItemsDto,
+          args.grpc as CollectionItemsDto,
         );
         break;
       case "mockHistory":
@@ -7765,9 +7987,9 @@ export default class CollectionsViewModel {
 
     const [selfhostBackendUrl] = getSelfhostUrls();
     if (selfhostBackendUrl) {
-        return selfhostBackendUrl;
+      return selfhostBackendUrl;
     }
-    
+
     if (hubUrl && constants.APP_ENVIRONMENT_PATH !== "local") {
       const envSuffix = constants.APP_ENVIRONMENT_PATH;
       return `${hubUrl}/${envSuffix}`;
@@ -8264,10 +8486,10 @@ export default class CollectionsViewModel {
 
   public handleRedirectToAdminPanel = async (teamId: string) => {
     const [authToken] = getAuthJwt();
-    const [,,selfhostAdminUrl] = getSelfhostUrls();
-    if(selfhostAdminUrl){
-        await open(selfhostAdminUrl);
-    }else{
+    const [, , selfhostAdminUrl] = getSelfhostUrls();
+    if (selfhostAdminUrl) {
+      await open(selfhostAdminUrl);
+    } else {
       await open(
         `${constants.ADMIN_URL}/billing/billingOverview/${teamId}?redirectTo=changePlan&xid=${authToken}`,
       );

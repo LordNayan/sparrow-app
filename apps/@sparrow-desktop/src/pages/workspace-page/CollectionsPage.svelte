@@ -81,6 +81,7 @@
   import SocketIoExplorerPage from "./sub-pages/SocketIoExplorerPage/SocketIoExplorerPage.svelte";
   import { SocketIORequestDefaultAliasBaseEnum } from "@sparrow/common/types/workspace/socket-io-request-base";
   import GraphqlExplorerPage from "./sub-pages/GraphqlExplorerPage/GraphqlExplorerPage.svelte";
+  import GrpcExplorerPage from "./sub-pages/GrpcExplorerPage/GrpcExplorerPage.svelte";
   import { GraphqlRequestDefaultAliasBaseEnum } from "@sparrow/common/types/workspace/graphql-request-base";
 
   import { open } from "@tauri-apps/plugin-shell";
@@ -1006,6 +1007,12 @@
                     <Motion {...scaleMotionProps} let:motion>
                       <div class="h-100">
                         <GraphqlExplorerPage tab={$activeTab} />
+                      </div>
+                    </Motion>
+                  {:else if $activeTab?.type === TabTypeEnum.GRPC}
+                    <Motion {...scaleMotionProps} let:motion>
+                      <div class="h-100">
+                        <GrpcExplorerPage tab={$activeTab} />
                       </div>
                     </Motion>
                   {:else if $activeTab?.type === TabTypeEnum.SAVED_REQUEST}

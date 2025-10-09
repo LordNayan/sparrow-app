@@ -68,6 +68,7 @@
     SocketIcon,
     SocketIoIcon,
     GraphIcon,
+    GrpcIcon,
     DismissRegular,
     AddRegular,
     ChevronRightRegular,
@@ -744,6 +745,18 @@
         disabled: false,
         hidden: false,
         icon: GraphIcon,
+      },
+      {
+        onClick: () => {
+          onItemCreated("grpcCollection", {
+            workspaceId: collection.workspaceId,
+            collection,
+          });
+        },
+        displayText: `Add gRPC`,
+        disabled: false,
+        hidden: false,
+        icon: GrpcIcon,
       },
       {
         onClick: () => {

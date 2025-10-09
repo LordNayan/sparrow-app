@@ -3,6 +3,7 @@ import {
   InitEnvironmentTab,
   InitFolderTab,
   InitGraphqlTab,
+  InitGrpcTab,
   InitMockRequestTab,
   InitRequestTab,
   InitSavedRequestTab,
@@ -47,6 +48,14 @@ class InitTab {
    */
   public graphQl = (_id: string, _workspaceId: string) => {
     return new InitGraphqlTab(_id, _workspaceId);
+  };
+
+  /**
+   * @param _id - grpc mongo document id
+   * @param _workspaceId - Workspace mongo id to which environment belongs to
+   */
+  public grpc = (_id: string, _workspaceId: string) => {
+    return new InitGrpcTab(_id, _workspaceId);
   };
 
   /**

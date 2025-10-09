@@ -6,6 +6,7 @@
     EmptyCollection,
     Folder,
     Graphql,
+    Grpc,
     MockRequest,
     Request,
     SavedRequest,
@@ -831,6 +832,30 @@
                     {userRole}
                     {isSharedWorkspace}
                     graphql={data.data}
+                    {onItemRenamed}
+                    {onItemDeleted}
+                    {onItemOpened}
+                    folder={data?.parentFolder?.id
+                      ? {
+                          id: data.parentFolder.id,
+                          name: data.parentFolder.name,
+                        }
+                      : null}
+                    collection={{
+                      id: data.parentCollection.id,
+                      name: data.parentCollection.name,
+                      workspaceId: data.parentCollection.workspaceId,
+                      activeSync: data.parentCollection.activeSync,
+                    }}
+                    {activeTabId}
+                  />
+                </div>
+              {:else if data.type === CollectionItemTypeBaseEnum.GRPC}
+                <div style="cursor:pointer;">
+                  <Grpc
+                    {userRole}
+                    {isSharedWorkspace}
+                    grpc={data.data}
                     {onItemRenamed}
                     {onItemDeleted}
                     {onItemOpened}

@@ -34,6 +34,7 @@ import {
   AiRequestTabAdapter,
   CollectionTabAdapter,
   GraphqlTabAdapter,
+  GrpcTabAdapter,
   RequestMockTabAdapter,
   RequestTabAdapter,
   SocketIoTabAdapter,
@@ -607,6 +608,17 @@ export class DashboardViewModel {
         await this.tabRepository.createTab(adaptedGraphql, workspaceId);
         break;
       }
+      case "GRPC": {
+        const grpcTabAdapter = new GrpcTabAdapter();
+        const adaptedGrpc = grpcTabAdapter.adapt(
+          workspaceId,
+          collectionId,
+          folderId,
+          tree,
+        );
+        await this.tabRepository.createTab(adaptedGrpc, workspaceId);
+        break;
+      }
       case "WEBSOCKET": {
         const socketTabAdapter = new SocketTabAdapter();
         const adaptedSocket = socketTabAdapter.adapt(
@@ -782,6 +794,8 @@ export class DashboardViewModel {
     switch (tree.type) {
       case ItemType.GRAPHQL:
         return tree.graphql?.url || "";
+      case ItemType.GRPC:
+        return tree.grpc?.url || "";
       case ItemType.SOCKET_IO:
         return tree.socketio?.url || "";
       case ItemType.WEB_SOCKET:
@@ -1038,6 +1052,7 @@ export class DashboardViewModel {
         case ItemType.WEB_SOCKET:
         case ItemType.MOCK_REQUEST:
         case ItemType.GRAPHQL:
+        case ItemType.GRPC:
         case ItemType.AI_REQUEST:
           requests.push(itemData);
           break;

@@ -1,4 +1,5 @@
 import type { GraphqlRequestMetaDataDtoInterface } from "./graphql-request-dto";
+import type { GrpcRequestMetaDataDtoInterface } from "./grpc-request-dto";
 import type { HttpRequestMetaDataDtoInterface } from "./http-request-dto";
 import type { HttpRequestMockMetaDataDtoInterface } from "./http-request-mock-dto";
 import type { SocketIORequestMetaDataDtoInterface } from "./socket-io-request-dto";
@@ -11,6 +12,7 @@ export enum CollectionItemTypeDtoEnum {
   WEBSOCKET = "WEBSOCKET",
   SOCKETIO = "SOCKETIO",
   GRAPHQL = "GRAPHQL",
+  GRPC = "GRPC",
   MOCK_REQUEST = "MOCK_REQUEST",
 }
 
@@ -30,6 +32,7 @@ export interface CollectionItemDtoInterface {
   websocket?: WebSocketRequestMetaDataDtoInterface;
   socketio?: SocketIORequestMetaDataDtoInterface;
   graphql?: GraphqlRequestMetaDataDtoInterface;
+  grpc?: GrpcRequestMetaDataDtoInterface;
   mockRequest?: HttpRequestMockMetaDataDtoInterface;
   isDeleted?: boolean;
   createdAt?: Date;

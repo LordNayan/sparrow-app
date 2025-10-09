@@ -1,6 +1,7 @@
 import type { AiRequestBaseInterface } from "./ai-request-base";
 import type { FolderBaseInterface } from "./folder-base";
 import type { GraphqlRequestBaseInterface } from "./graphql-request-base";
+import type { GrpcRequestBaseInterface } from "./grpc-request-base";
 import type { HttpRequestBaseInterface } from "./http-request-base";
 import type {
   HttpRequestMockBaseInterface,
@@ -20,6 +21,7 @@ export enum CollectionItemTypeBaseEnum {
   WEBSOCKET = "WEBSOCKET",
   SOCKETIO = "SOCKETIO",
   GRAPHQL = "GRAPHQL",
+  GRPC = "GRPC",
   SAVED_REQUEST = "REQUEST_RESPONSE",
   MOCK_REQUEST = "MOCK_REQUEST",
   AI_REQUEST = "AI_REQUEST",
@@ -37,6 +39,7 @@ export interface CollectionItemBaseInterface {
   websocket?: WebsocketRequestBaseInterface;
   socketio?: SocketIORequestBaseInterface;
   graphql?: GraphqlRequestBaseInterface;
+  grpc?: GrpcRequestBaseInterface;
   requestResponse?: HttpRequestSavedBaseInterface;
   mockRequest?: HttpRequestMockBaseInterface;
   mockRequestResponse?: HttpResponseMockBaseInterface;
@@ -152,6 +155,7 @@ export interface CollectionArgsBaseInterface {
   websocket?: CollectionItemBaseInterface;
   socketio?: CollectionItemBaseInterface;
   graphql?: CollectionItemBaseInterface;
+  grpc?: CollectionItemBaseInterface;
   requestResponse?: CollectionItemBaseInterface;
   mockRequest?: CollectionItemBaseInterface;
   aiRequest?: CollectionItemBaseInterface;
